@@ -13,7 +13,7 @@ import           Data.Map.Merge.Lazy
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Database.SQLite.Simple
-import           Errors
+import           Types.Errors
 import           TextShow
 import           Types.SchemaTypes
 import           Types.SchemaOps
