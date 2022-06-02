@@ -1,0 +1,6 @@
+.stack-work/
+*.lock
+*.cabal
+*~
+.DS_Store
+*.sqlite*
