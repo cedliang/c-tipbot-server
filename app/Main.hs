@@ -3,17 +3,12 @@
 module Main where
 
 import           DbManager
-import           Types.SchemaTypes
-import           Types.SchemaOps
 import           Control.Concurrent
 import           Database.SQLite.Simple
 import           Control.Monad
 import           Data.Foldable
-import           Control.Concurrent.MVar
-import           Control.Concurrent.QSemN
 import           Control.Exception
 import qualified Data.Map as Map
-import           Data.UnixTime
 
 main :: IO ()
 main = do
@@ -26,7 +21,6 @@ main = do
   putStrLn "456:"
     >> bracket (readChan connsChan) (writeChan connsChan) (getUserBalance 456)
     >>= print
-  stime <- getUnixTime
   startQsem <- newQSemN 0
   -- add user test
   -- forkIO
@@ -37,7 +31,7 @@ main = do
   --   >>= putStrLn
   --   >> signalQSemN startQsem 1
   -- get balance test
-  replicateM 10000
+  replicateM 100
     $ forkIO
     $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance 456)
     -- >>= print
@@ -53,7 +47,7 @@ main = do
   --   >>= print
   --   >> signalQSemN startQsem 1
   -- transfer balance test
-  replicateM 10000
+  replicateM 100
     $ forkIO
     $ bracket
       (readChan connsChan)
@@ -64,8 +58,7 @@ main = do
          456)
     -- >>= print
     >> signalQSemN startQsem 1
-  waitQSemN startQsem 20000
-  getUnixTime >>= print . flip diffUnixTime stime
+  waitQSemN startQsem 200
   putStrLn "\n\nENDING BALANCES: "
   putStrLn "123:"
     >> bracket (readChan connsChan) (writeChan connsChan) (getUserBalance 123)

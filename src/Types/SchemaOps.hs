@@ -5,7 +5,6 @@ module Types.SchemaOps where
 import           Types.SchemaTypes
 import           Control.Concurrent.MVar
 import           Types.DBIO
-import           TextShow
 import           Errors
 import           Database.SQLite.Simple
 import           Data.Text (Text)

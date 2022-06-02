@@ -1,4 +1,5 @@
-PRAGMA foreign_keys = OFF;
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
 BEGIN TRANSACTION;
 CREATE TABLE tokens (
   id TEXT PRIMARY KEY,
