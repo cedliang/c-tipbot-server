@@ -70,20 +70,20 @@ modifyUserBalance writeLock did diffVal conn = runExceptT
     let (Value diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
     (Value _ eTok) <- addUserIfNotExists writeLock did conn
-    transaction <- writeTransact writeLock conn
+    tx <- writeTransact writeLock conn
       $ do
         modifyLovelace False diffLovelace did conn
         modifyTokens False nonzeroDiffTokens did eTok conn
-    case transaction of
-      Left e  -> throwError
-        (SQLiteError
-           ("Could not modifyUserBalance: \nDid: "
-            <> showt did
-            <> "\nValue: "
-            <> T.pack (show diffVal)
-            <> "; transaction failed.")
-           e)
-      Right _ -> pure ()
+    throwOnLeft handleTxFailure tx pure
+  where
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure = throwError
+      . SQLiteError
+        ("Could not modifyUserBalance: \nDid: "
+         <> showt did
+         <> "\nValue: "
+         <> T.pack (show diffVal)
+         <> "; tx failed.")
 
 transferUserBalance :: MVar ()
                     -> (DiscordId, Value)
@@ -95,57 +95,56 @@ transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT
     let (Value diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
     existingSourceBalance <- lift $ getUserBalance sourcedid conn
-    when (isLeft existingSourceBalance)
-      $ throwError
+    throwOnLeft handleNonExistentSource existingSourceBalance
+      $ \(Value sourceeVal sourceeTok) -> do
+        (Value _ desteTok) <- addUserIfNotExists writeLock destdid conn
+        tx <- writeTransact writeLock conn
+          $ do
+            modifyLovelace True diffLovelace sourcedid conn
+            modifyLovelace False diffLovelace destdid conn
+            modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
+            modifyTokens False nonzeroDiffTokens destdid desteTok conn
+        throwOnLeft handleTxFailure tx pure
+  where
+    handleNonExistentSource :: OperationError -> ExceptT OperationError IO ()
+    handleNonExistentSource e = throwError
       $ ConditionFailureError
         ("Could not transferUserBalance: source user "
          <> showt sourcedid
          <> " does not exist.")
-      <> fromLeft mempty existingSourceBalance
-    let (Value sourceeVal sourceeTok) = fromRight mempty existingSourceBalance
-    (Value _ desteTok) <- addUserIfNotExists writeLock destdid conn
-    transaction <- lift
-      $ try
-      $ bracket (takeMVar writeLock) (putMVar writeLock)
-      $ const
-      $ withImmediateTransaction conn
-      $ do
-        modifyLovelace True diffLovelace sourcedid conn
-        modifyLovelace False diffLovelace destdid conn
-        modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
-        modifyTokens False nonzeroDiffTokens destdid desteTok conn
-    case transaction of
-      Left e  -> throwError
-        (SQLiteError
-           ("Could not transferUserBalance: transaction failed.\nSource did: "
-            <> showt sourcedid
-            <> "\nDest did: "
-            <> showt destdid
-            <> "\nValue: "
-            <> T.pack (show diffVal))
-           e)
-      Right _ -> pure ()
+      <> e
+
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure = throwError
+      . SQLiteError
+        ("Could not transferUserBalance: tx failed.\nSource did: "
+         <> showt sourcedid
+         <> "\nDest did: "
+         <> showt destdid
+         <> "\nValue: "
+         <> T.pack (show diffVal))
 
 -- adds user if doesn't exist, returning either existing value or value after add
 addUserIfNotExists
   :: MVar () -> DiscordId -> Connection -> ExceptT OperationError IO Value
 addUserIfNotExists writeLock did conn = do
   existingBalance <- lift $ getUserBalance did conn
-  when (isLeft existingBalance)
-    $ do
+  throwOnLeft handleNotExists existingBalance pure
+  where
+    handleNotExists :: OperationError -> ExceptT OperationError IO Value
+    handleNotExists eBal = do
       r <- lift $ addNewUser writeLock did conn
-      case r of
-        Left e  -> throwError
-          (ConditionFailureError
-             ("Could not modifyUserBalance on did "
-              <> showt did
-              <> ": existing record could not be found, and insert operation failed.")
-           <> e
-           <> fromLeft mempty existingBalance)
-        Right _ -> pure ()
-  case existingBalance of
-    Left _     -> pure mempty
-    Right eBal -> pure eBal
+      throwOnLeft (handleAddUser eBal) r (const $ pure mempty)
+
+    handleAddUser
+      :: OperationError -> OperationError -> ExceptT OperationError IO Value
+    handleAddUser eBal e = throwError
+      $ ConditionFailureError
+        ("Could not modifyUserBalance on did "
+         <> showt did
+         <> ": existing record could not be found, and insert operation failed.")
+      <> e
+      <> eBal
 
 addNewUser
   :: MVar () -> DiscordId -> Connection -> IO (Either OperationError ())
@@ -153,7 +152,8 @@ addNewUser writeLock did conn = runExceptT
   $ do
     r <- writeTransact writeLock conn
       $ execute conn "INSERT INTO user (did) VALUES (?)" (Only did)
-    case r of
-      Left e  -> throwError
-        $ SQLiteError ("Failed to add new user: " <> showt did) e
-      Right _ -> pure ()
+    throwOnLeft handleTxFailure r pure
+  where
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure = throwError
+      . SQLiteError ("Failed to add new user: " <> showt did)

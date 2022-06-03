@@ -21,10 +21,11 @@ addAlias writeLock alias conn = runExceptT
   $ do
     tx <- writeTransact writeLock conn
       $ execute conn "INSERT INTO alias VALUES (?)" alias
-    case tx of
-      Left e  -> throwError
-        $ SQLiteError ("Failed to add alias: " <> T.pack (show alias)) e
-      Right _ -> pure ()
+    throwOnLeft handleTxFailure tx pure
+  where
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure = throwError
+      . SQLiteError ("Failed to add alias: " <> T.pack (show alias))
 
 getAlias :: Text -> Connection -> IO (Either OperationError TokenAlias)
 getAlias alias conn = handle
