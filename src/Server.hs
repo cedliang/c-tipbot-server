@@ -26,11 +26,12 @@ import           TextShow
 
 servantIO :: IO ()
 servantIO = do
+  mapM_ initialiseDbs existentManagerIds
   manMap <- mkManagersMap existentManagerIds
   runSettings serveSettings $ (simpleCors . logStdoutDev) $ servApp manMap
 
 existentManagerIds :: [Int]
-existentManagerIds = [1, 2]
+existentManagerIds = [1, 2, 3]
 
 data Config = Config { hostPort :: Int, hostAddr :: HostPreference }
   deriving (Show, Eq)
@@ -46,14 +47,27 @@ serveSettings =
 servApp :: ManagersMap -> Application
 servApp = serve (Proxy :: Proxy TipbotApi) . server1
 
-type TipbotApi = "backend" :> Capture "backendID" Int
-  :> "user" :> Capture "userdid" Int :> Get '[JSON] CValue
+type TipbotApi = "backend"
+  :> Capture "backendID" Int :> "user" :> Capture "userdid" Int
+  :> Get '[JSON] CValue :<|> "backend" :> Capture "backendID" Int
+  :> "user" :> Capture "userdid" Int :> Post '[JSON] CValue
 
 server1 :: ManagersMap -> Server TipbotApi
-server1 = userBalance
+server1 manMap = userBalance manMap :<|> userBalance' manMap
 
 userBalance :: ManagersMap -> Int -> Int -> Handler CValue
 userBalance manMap backendId did = do
+  (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+  rUserBalance <- liftIO
+    $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance did)
+  throwOnLeft (throwError . txError) rUserBalance pure
+  where
+    txError :: OperationError -> ServerError
+    txError e = let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
+                in err404 { errBody = "UserID does not exist: " <> eBS }
+
+userBalance' :: ManagersMap -> Int -> Int -> Handler CValue
+userBalance' manMap backendId did = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- liftIO
     $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance did)
