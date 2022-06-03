@@ -1,7 +1,8 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- put individual low level alteration commands in each of the type files, but put high level db interaction endpoints here
-module DbManager where
+module TipBackend where
 
 import           Control.Concurrent
 import           Control.Exception
@@ -18,12 +19,14 @@ import           TextShow
 import           Types.SchemaTypes
 import           Types.SchemaOps
 import           Types.DBIO
+import           Data.Aeson
+import           GHC.Generics
 
-data Value = Value { lovelace :: Int, tokens :: Map Text Int }
-  deriving (Show)
+data CValue = CValue { lovelace :: Int, tokens :: Map Text Int }
+  deriving (Show, Generic)
 
-instance Eq Value where
-  (==) (Value l1 t1) (Value l2 t2) =
+instance Eq CValue where
+  (==) (CValue l1 t1) (CValue l2 t2) =
     l1 == l2 && diffEqZero t1 t2 && diffEqZero t2 t1
     where
       diffEqZero tokens1 tokens2 = all (== 0)
@@ -35,14 +38,19 @@ instance Eq Value where
           tokens1
           tokens2
 
-instance Semigroup Value where
-  (<>) (Value l1 t1) (Value l2 t2) = Value (l1 + l2)
+instance ToJSON CValue where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON CValue
+
+instance Semigroup CValue where
+  (<>) (CValue l1 t1) (CValue l2 t2) = CValue (l1 + l2)
     $ merge preserveMissing preserveMissing (zipWithMatched $ const (+)) t1 t2
 
-instance Monoid Value where
-  mempty = Value 0 Map.empty
+instance Monoid CValue where
+  mempty = CValue 0 Map.empty
 
-getUserBalance :: DiscordId -> Connection -> IO (Either OperationError Value)
+getUserBalance :: DiscordId -> Connection -> IO (Either OperationError CValue)
 getUserBalance did conn = runExceptT
   $ do
     rlovelace <- lift
@@ -58,18 +66,18 @@ getUserBalance did conn = runExceptT
          "SELECT token_id, amount FROM user_balance WHERE user_did=(?)"
          (Only did) :: IO [(Text, Int)])
     let (Only lovelaceamt) = head rlovelace
-    pure $ Value lovelaceamt $ Map.fromList rtokens
+    pure $ CValue lovelaceamt $ Map.fromList rtokens
 
 modifyUserBalance :: MVar ()
                   -> DiscordId
-                  -> Value
+                  -> CValue
                   -> Connection
                   -> IO (Either OperationError ())
 modifyUserBalance writeLock did diffVal conn = runExceptT
   $ do
-    let (Value diffLovelace diffTokens) = diffVal
+    let (CValue diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
-    (Value _ eTok) <- addUserIfNotExists writeLock did conn
+    (CValue _ eTok) <- addUserIfNotExists writeLock did conn
     tx <- writeTransact writeLock conn
       $ do
         modifyLovelace False diffLovelace did conn
@@ -86,18 +94,18 @@ modifyUserBalance writeLock did diffVal conn = runExceptT
          <> "; tx failed.")
 
 transferUserBalance :: MVar ()
-                    -> (DiscordId, Value)
+                    -> (DiscordId, CValue)
                     -> DiscordId
                     -> Connection
                     -> IO (Either OperationError ())
 transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT
   $ do
-    let (Value diffLovelace diffTokens) = diffVal
+    let (CValue diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
     existingSourceBalance <- lift $ getUserBalance sourcedid conn
     throwOnLeft handleNonExistentSource existingSourceBalance
-      $ \(Value sourceeVal sourceeTok) -> do
-        (Value _ desteTok) <- addUserIfNotExists writeLock destdid conn
+      $ \(CValue sourceeVal sourceeTok) -> do
+        (CValue _ desteTok) <- addUserIfNotExists writeLock destdid conn
         tx <- writeTransact writeLock conn
           $ do
             modifyLovelace True diffLovelace sourcedid conn
@@ -126,18 +134,18 @@ transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT
 
 -- adds user if doesn't exist, returning either existing value or value after add
 addUserIfNotExists
-  :: MVar () -> DiscordId -> Connection -> ExceptT OperationError IO Value
+  :: MVar () -> DiscordId -> Connection -> ExceptT OperationError IO CValue
 addUserIfNotExists writeLock did conn = do
   existingBalance <- lift $ getUserBalance did conn
   throwOnLeft handleNotExists existingBalance pure
   where
-    handleNotExists :: OperationError -> ExceptT OperationError IO Value
+    handleNotExists :: OperationError -> ExceptT OperationError IO CValue
     handleNotExists eBal = do
       r <- lift $ addNewUser writeLock did conn
       throwOnLeft (handleAddUser eBal) r (const $ pure mempty)
 
     handleAddUser
-      :: OperationError -> OperationError -> ExceptT OperationError IO Value
+      :: OperationError -> OperationError -> ExceptT OperationError IO CValue
     handleAddUser eBal e = throwError
       $ ConditionFailureError
         ("Could not modifyUserBalance on did "
