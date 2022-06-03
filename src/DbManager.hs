@@ -52,12 +52,12 @@ getUserBalance did conn = runExceptT
       $ throwError
       $ ConditionFailureError
       $ "Could not find user record in getUserBalance: " <> showt did
-    let (Only lovelaceamt) = head rlovelace
     rtokens <- lift
       (query
          conn
          "SELECT token_id, amount FROM user_balance WHERE user_did=(?)"
          (Only did) :: IO [(Text, Int)])
+    let (Only lovelaceamt) = head rlovelace
     pure $ Value lovelaceamt $ Map.fromList rtokens
 
 modifyUserBalance :: MVar ()
