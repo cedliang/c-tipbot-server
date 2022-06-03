@@ -15,7 +15,7 @@ import           Servant
 import           Database.SQLite.Simple (Connection, execute_, open)
 import           Control.Concurrent
 import           DbConnections
-import           TipBackend (CValue, getUserBalance)
+import           TipBackend (CValue, getUserBalance, modifyUserBalance)
 import           Data.Aeson
 import           Data.Maybe (fromMaybe)
 import           Control.Exception (bracket)
@@ -47,30 +47,41 @@ serveSettings =
 servApp :: ManagersMap -> Application
 servApp = serve (Proxy :: Proxy TipbotApi) . server1
 
-type TipbotApi = "backend" :> Capture "backendID" Int :> "user"
-  :> Capture "userdid" Int :> (Get '[JSON] CValue :<|> Post '[JSON] CValue)
+type TipbotApi = "backend"
+  :> Capture "backendID" Int :> "user" :> Capture "userdid" Int
+  :> (Get '[JSON] CValue :<|> ReqBody '[JSON] CValue :> Post '[JSON] CValue)
 
 server1 :: ManagersMap -> Server TipbotApi
 server1 = userServer
   where
-    userServer manMap backendId did =
-      userBalance manMap backendId did :<|> userBalance' manMap backendId did
+    userServer manMap backendId did = epUserBalance manMap backendId did
+      :<|> epModifyUserBalance manMap backendId did
 
-userBalance :: ManagersMap -> Int -> Int -> Handler CValue
-userBalance manMap backendId did = do
+epUserBalance :: ManagersMap -> Int -> Int -> Handler CValue
+epUserBalance manMap backendId did = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- liftIO
     $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance did)
-  throwOnLeft (throwError . txError) rUserBalance pure
+  throwOnLeft (throwError . userExistsError) rUserBalance pure
 
-userBalance' :: ManagersMap -> Int -> Int -> Handler CValue
-userBalance' manMap backendId did = do
+epModifyUserBalance :: ManagersMap -> Int -> Int -> CValue -> Handler CValue
+epModifyUserBalance manMap backendId did diffValue = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- liftIO
-    $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance did)
-  throwOnLeft (throwError . txError) rUserBalance pure
+    $ bracket
+      (readChan connsChan)
+      (writeChan connsChan)
+      (modifyUserBalance writeLock did diffValue)
+  throwOnLeft (throwError . modifyTokenError) rUserBalance
+    $ const
+    $ epUserBalance manMap backendId did
 
-txError :: OperationError -> ServerError
-txError e = let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-            in err404 { errBody = "UserID does not exist: " <> eBS }
+modifyTokenError :: OperationError -> ServerError
+modifyTokenError e =
+  let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
+  in err404 { errBody = "Token transaction failure: " <> eBS }
+
+userExistsError :: OperationError -> ServerError
+userExistsError e = let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
+                    in err404 { errBody = "UserID does not exist: " <> eBS }
 
