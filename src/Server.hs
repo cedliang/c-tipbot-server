@@ -15,7 +15,8 @@ import           Servant
 import           Database.SQLite.Simple (Connection, execute_, open)
 import           Control.Concurrent
 import           DbConnections
-import           TipBackend (CValue, getUserBalance, modifyUserBalance)
+import           TipBackend (CValue, getUserBalance, modifyUserBalance
+                           , transferUserBalance)
 import           Data.Aeson
 import           Data.Maybe (fromMaybe)
 import           Control.Exception (bracket)
@@ -49,35 +50,47 @@ servApp = serve (Proxy :: Proxy TipbotApi) . server1
 
 type TipbotApi = "backend"
   :> Capture "backendID" Int :> "user" :> Capture "userdid" Int
-  :> (Get '[JSON] CValue :<|> ReqBody '[JSON] CValue :> Post '[JSON] CValue)
+  :> (Get '[JSON] CValue :<|> ReqBody '[JSON] CValue
+      :> Post '[JSON] CValue :<|> "transfer" :> Capture "destDid" Int
+      :> ReqBody '[JSON] CValue :> Post '[JSON] [CValue])
 
 server1 :: ManagersMap -> Server TipbotApi
 server1 = userServer
   where
     userServer manMap backendId did = epUserBalance manMap backendId did
       :<|> epModifyUserBalance manMap backendId did
+      :<|> epTransferUserBalance manMap backendId did
 
 epUserBalance :: ManagersMap -> Int -> Int -> Handler CValue
 epUserBalance manMap backendId did = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-  rUserBalance <- liftIO
-    $ bracket (readChan connsChan) (writeChan connsChan) (getUserBalance did)
+  rUserBalance <- bracketEndpointAction connsChan $ getUserBalance did
   throwOnLeft (throwError . userExistsError) rUserBalance pure
 
 epModifyUserBalance :: ManagersMap -> Int -> Int -> CValue -> Handler CValue
 epModifyUserBalance manMap backendId did diffValue = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-  rUserBalance <- liftIO
-    $ bracket
-      (readChan connsChan)
-      (writeChan connsChan)
-      (modifyUserBalance writeLock did diffValue)
-  throwOnLeft (throwError . modifyTokenError) rUserBalance
+  rUserBalance <- bracketEndpointAction connsChan
+    $ modifyUserBalance writeLock did diffValue
+  throwOnLeft (throwError . tokenTransactionError) rUserBalance
     $ const
     $ epUserBalance manMap backendId did
 
-modifyTokenError :: OperationError -> ServerError
-modifyTokenError e =
+epTransferUserBalance
+  :: ManagersMap -> Int -> Int -> Int -> CValue -> Handler [CValue]
+epTransferUserBalance manMap backendId sourceDid destDid diffValue = do
+  (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+  rUserBalance <- bracketEndpointAction connsChan
+    $ transferUserBalance writeLock (sourceDid, diffValue) destDid
+  throwOnLeft (throwError . tokenTransactionError) rUserBalance
+    $ const
+    $ do
+      sourceBal <- epUserBalance manMap backendId sourceDid
+      destBal <- epUserBalance manMap backendId destDid
+      pure [sourceBal, destBal]
+
+tokenTransactionError :: OperationError -> ServerError
+tokenTransactionError e =
   let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
   in err404 { errBody = "Token transaction failure: " <> eBS }
 

@@ -8,6 +8,9 @@ import           Database.SQLite.Simple (Connection, execute_, open
                                        , withTransaction, close)
 import           Control.Concurrent
 import           Servant
+import           Control.Exception
+import           Control.Monad.Except
+import           Types.Errors
 
 initialiseConn :: Connection -> IO ()
 initialiseConn conn = do
@@ -21,6 +24,12 @@ openConnChan connName numConns = do
   connsChan <- newChan
   writeList2Chan connsChan conns
   pure connsChan
+
+bracketEndpointAction :: Chan Connection
+                      -> (Connection -> IO (Either OperationError a))
+                      -> Servant.Handler (Either OperationError a)
+bracketEndpointAction connsChan ioacts = liftIO
+  $ bracket (readChan connsChan) (writeChan connsChan) ioacts
 
 data ManagerResources =
   ManagerResources { connsChan :: Chan Connection, writeLock :: MVar () }
@@ -44,7 +53,7 @@ getManResources manMap lid = case lookup lid manMap of
 
 -- reusable component for retrieving connection and write lock
 handlerManMap
-  :: [Int] -> ManagersMap -> Int -> Handler (Chan Connection, MVar ())
+  :: [Int] -> ManagersMap -> Int -> Servant.Handler (Chan Connection, MVar ())
 handlerManMap exManIds manMap backendId = do
   when (backendId `notElem` exManIds) $ throwError backendDoesntExist
   maybe (throwError connectionFailure) pure $ getManResources manMap backendId
