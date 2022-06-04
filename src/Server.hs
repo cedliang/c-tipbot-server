@@ -84,10 +84,10 @@ epTransferUserBalance manMap backendId sourceDid destDid diffValue = do
     $ transferUserBalance writeLock (sourceDid, diffValue) destDid
   throwOnLeft (throwError . tokenTransactionError) rUserBalance
     $ const
-    $ do
-      sourceBal <- epUserBalance manMap backendId sourceDid
-      destBal <- epUserBalance manMap backendId destDid
-      pure [sourceBal, destBal]
+    $ zipWithM
+      ($)
+      (replicate 2 $ epUserBalance manMap backendId)
+      [sourceDid, destDid]
 
 tokenTransactionError :: OperationError -> ServerError
 tokenTransactionError e =
