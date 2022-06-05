@@ -5,9 +5,7 @@
 module TipBackend where
 
 import           Control.Concurrent
-import           Control.Exception
 import           Control.Monad.Except
-import           Data.Either
 import           Data.Map as Map (Map)
 import qualified Data.Map as Map
 import           Data.Map.Merge.Lazy
@@ -49,6 +47,22 @@ instance Semigroup CValue where
 
 instance Monoid CValue where
   mempty = CValue 0 Map.empty
+
+listBackendTokens :: Connection -> IO (Either OperationError [Token])
+listBackendTokens conn = runExceptT
+  $ lift (query_ conn "SELECT * FROM tokens" :: IO [Token])
+
+addBackendToken
+  :: MVar () -> Token -> Connection -> IO (Either OperationError ())
+addBackendToken writeLock tok conn = runExceptT
+  $ do
+    r <- writeTransact writeLock conn
+      $ execute conn "INSERT INTO tokens VALUES (?,?,?)" tok
+    throwOnLeft handleAddTokenError r pure
+  where
+    handleAddTokenError :: SQLError -> ExceptT OperationError IO ()
+    handleAddTokenError = throwError
+      . SQLiteError ("Failed to add new token: " <> T.pack (show tok))
 
 getUserBalance :: DiscordId -> Connection -> IO (Either OperationError CValue)
 getUserBalance did conn = runExceptT

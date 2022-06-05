@@ -1,10 +1,20 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Types.SchemaTypes where
 
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Database.SQLite.Simple
+import           GHC.Generics
+import           Data.Aeson
 
-data Token = Token { id :: Int, name :: Text, decimals :: Int }
+data Token = Token { id :: Text, name :: Text, decimals :: Int }
+  deriving (Show, Generic)
+
+instance ToJSON Token where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON Token
 
 instance FromRow Token where
   fromRow = Token <$> field <*> field <*> field
