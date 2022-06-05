@@ -2,17 +2,17 @@
 
 module Types.SchemaOps where
 
-import           Types.SchemaTypes
 import           Control.Concurrent.MVar
-import           Types.DBIO
-import           Types.Errors
-import           Database.SQLite.Simple
-import           Data.Text (Text)
-import qualified Data.Text as T
-import           Control.Monad.Except
 import           Control.Exception (bracket, handle)
+import           Control.Monad.Except
 import           Data.Map as Map (Map)
 import qualified Data.Map as Map
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Database.SQLite.Simple
+import           Types.DBIO
+import           Types.Errors
+import           Types.SchemaTypes
 
 -- Make sure that these aliases are capitalised!
 addAlias

@@ -2,15 +2,15 @@
 
 module Main where
 
-import           TipBackend
 import           Control.Concurrent
-import           Database.SQLite.Simple
-import           Control.Monad
-import           Data.Foldable
 import           Control.Exception
-import qualified Data.Map as Map
+import           Control.Monad
 import           Data.Aeson
+import           Data.Foldable
+import qualified Data.Map as Map
+import           Database.SQLite.Simple
 import           Server (servantIO)
+import           TipBackend
 
 main = servantIO
 -- main :: IO ()

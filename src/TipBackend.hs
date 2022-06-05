@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- put individual low level alteration commands in each of the type files, but put high level db interaction endpoints here
@@ -6,19 +6,19 @@ module TipBackend where
 
 import           Control.Concurrent
 import           Control.Monad.Except
-import           Data.Map as Map (Map)
-import qualified Data.Map as Map
-import           Data.Map.Merge.Lazy
-import           Data.Text (Text)
-import qualified Data.Text as T
-import           Database.SQLite.Simple
-import           Types.Errors
-import           TextShow
-import           Types.SchemaTypes
-import           Types.SchemaOps
-import           Types.DBIO
 import           Data.Aeson
+import           Data.Map               as Map (Map)
+import qualified Data.Map               as Map
+import           Data.Map.Merge.Lazy
+import           Data.Text              (Text)
+import qualified Data.Text              as T
+import           Database.SQLite.Simple
 import           GHC.Generics
+import           TextShow
+import           Types.DBIO
+import           Types.Errors
+import           Types.SchemaOps
+import           Types.SchemaTypes
 
 data CValue = CValue { lovelace :: Int, tokens :: Map Text Int }
   deriving (Show, Generic)

@@ -4,19 +4,19 @@
 
 module Server where
 
+import           Control.Exception (bracket)
 import           Control.Monad
+import qualified Data.ByteString as B
 import           Data.ByteString.Lazy (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import           DbConnections
 import           Network.Wai.Handler.Warp
-import           Network.Wai.Middleware.Cors
+import           Network.Wai.Middleware.Cors (simpleCors)
 import           Network.Wai.Middleware.RequestLogger
 import           Servant
-import           DbConnections
 import           TipBackend
-import           Control.Exception (bracket)
 import           Types.Errors
-import qualified Data.ByteString as B
 import           Types.SchemaTypes
 
 servantIO :: IO ()

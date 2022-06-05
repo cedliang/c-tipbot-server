@@ -1,10 +1,10 @@
 module Types.DBIO where
 
-import           Control.Monad.Except
 import           Control.Concurrent
-import           Types.Errors
-import           Database.SQLite.Simple
 import           Control.Exception
+import           Control.Monad.Except
+import           Database.SQLite.Simple
+import           Types.Errors
 
 writeTransact :: MVar ()
               -> Connection

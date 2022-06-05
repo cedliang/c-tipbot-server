@@ -2,10 +2,10 @@
 
 module Types.Errors where
 
-import           Database.SQLite.Simple (SQLError)
+import           Control.Exception (Exception)
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Control.Exception (Exception)
+import           Database.SQLite.Simple (SQLError)
 
 data OperationError = ConditionFailureError Text
                     | SQLiteError Text SQLError

@@ -3,13 +3,13 @@
 
 module DbConnections where
 
-import           Control.Monad
-import           Database.SQLite.Simple (Connection, execute_, open
-                                       , withTransaction, close)
 import           Control.Concurrent
-import           Servant
 import           Control.Exception
+import           Control.Monad
 import           Control.Monad.Except
+import           Database.SQLite.Simple (Connection, close, execute_, open
+                                       , withTransaction)
+import           Servant
 import           Types.Errors
 
 initialiseConn :: Connection -> IO ()

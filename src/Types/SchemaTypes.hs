@@ -2,11 +2,11 @@
 
 module Types.SchemaTypes where
 
+import           Data.Aeson
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Database.SQLite.Simple
 import           GHC.Generics
-import           Data.Aeson
 
 data Token = Token { id :: Text, name :: Text, decimals :: Int }
   deriving (Show, Generic)
