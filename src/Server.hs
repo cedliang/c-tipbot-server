@@ -5,6 +5,7 @@
 module Server where
 
 import           Control.Monad
+import           Data.ByteString.Lazy (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Network.Wai.Handler.Warp
@@ -67,7 +68,9 @@ epAddToken manMap backendId addTok = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   addTokOp
     <- bracketEndpointAction connsChan $ addBackendToken writeLock addTok
-  throwOnLeft (throwError . addTokenError) addTokOp
+  throwOnLeft
+    (throwError . mk404ServerError "Could not add token to backend: ")
+    addTokOp
     $ const
     $ epListTokens manMap backendId
 
@@ -75,20 +78,28 @@ epListTokens :: ManagersMap -> Int -> Handler [Token]
 epListTokens manMap backendId = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   toks <- bracketEndpointAction connsChan listBackendTokens
-  throwOnLeft (throwError . listTokensError) toks pure
+  throwOnLeft
+    (throwError . mk404ServerError "Could not get token list: ")
+    toks
+    pure
 
 epUserBalance :: ManagersMap -> Int -> Int -> Handler CValue
 epUserBalance manMap backendId did = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- bracketEndpointAction connsChan $ getUserBalance did
-  throwOnLeft (throwError . userExistsError) rUserBalance pure
+  throwOnLeft
+    (throwError . mk404ServerError "UserID does not exist: ")
+    rUserBalance
+    pure
 
 epModifyUserBalance :: ManagersMap -> Int -> Int -> CValue -> Handler CValue
 epModifyUserBalance manMap backendId did diffValue = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- bracketEndpointAction connsChan
     $ modifyUserBalance writeLock did diffValue
-  throwOnLeft (throwError . tokenTransactionError) rUserBalance
+  throwOnLeft
+    (throwError . mk404ServerError "Token transaction failure: ")
+    rUserBalance
     $ const
     $ epUserBalance manMap backendId did
 
@@ -98,28 +109,17 @@ epTransferUserBalance manMap backendId sourceDid destDid diffValue = do
   (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
   rUserBalance <- bracketEndpointAction connsChan
     $ transferUserBalance writeLock (sourceDid, diffValue) destDid
-  throwOnLeft (throwError . tokenTransactionError) rUserBalance
+  throwOnLeft
+    (throwError . mk404ServerError "Token transaction failure: ")
+    rUserBalance
     $ const
     $ zipWithM
       ($)
       (replicate 2 $ epUserBalance manMap backendId)
       [sourceDid, destDid]
 
-tokenTransactionError :: OperationError -> ServerError
-tokenTransactionError e =
+mk404ServerError :: ByteString -> OperationError -> ServerError
+mk404ServerError description e =
   let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-  in err404 { errBody = "Token transaction failure: " <> eBS }
-
-userExistsError :: OperationError -> ServerError
-userExistsError e = let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-                    in err404 { errBody = "UserID does not exist: " <> eBS }
-
-listTokensError :: OperationError -> ServerError
-listTokensError e = let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-                    in err404 { errBody = "Could not get token list: " <> eBS }
-
-addTokenError :: OperationError -> ServerError
-addTokenError e =
-  let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-  in err404 { errBody = "Could not add token to backend: " <> eBS }
+  in err404 { errBody = description <> eBS }
 
