@@ -143,21 +143,23 @@ transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT $ d
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
     either
         handleNonExistentSource
-        ( \(CValue sourceeVal sourceeTok) -> do
-            (CValue _ desteTok) <- addUserIfNotExists writeLock destdid conn
-            either handleTxFailure pure
-                =<< writeTransact
-                    writeLock
-                    conn
-                    ( do
-                        modifyLovelace True diffLovelace sourcedid conn
-                        modifyLovelace False diffLovelace destdid conn
-                        modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
-                        modifyTokens False nonzeroDiffTokens destdid desteTok conn
-                    )
-        )
+        (existentSourceAction diffLovelace nonzeroDiffTokens)
         =<< lift (getUserBalance sourcedid conn)
   where
+    existentSourceAction :: Int -> Map Text Int -> CValue -> ExceptT OperationError IO ()
+    existentSourceAction diffLovelace nonzeroDiffTokens (CValue sourceeVal sourceeTok) = do
+        (CValue _ desteTok) <- addUserIfNotExists writeLock destdid conn
+        either handleTxFailure pure
+            =<< writeTransact
+                writeLock
+                conn
+                ( do
+                    modifyLovelace True diffLovelace sourcedid conn
+                    modifyLovelace False diffLovelace destdid conn
+                    modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
+                    modifyTokens False nonzeroDiffTokens destdid desteTok conn
+                )
+
     handleNonExistentSource :: OperationError -> ExceptT OperationError IO ()
     handleNonExistentSource e =
         throwError $
