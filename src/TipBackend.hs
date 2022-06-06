@@ -62,8 +62,8 @@ listBackendTokens conn =
         lift (query_ conn "SELECT * FROM tokens" :: IO [Token])
 
 addBackendToken ::
-    MVar () -> Token -> Connection -> IO (Either OperationError ())
-addBackendToken writeLock tok conn =
+    Token -> MVar () -> Connection -> IO (Either OperationError ())
+addBackendToken tok writeLock conn =
     runExceptT $
         either handleAddTokenError pure
             =<< writeTransact
@@ -103,15 +103,15 @@ getUserBalance did conn = runExceptT $ do
     pure $ CValue lovelaceamt $ Map.fromList rtokens
 
 modifyUserBalance ::
-    MVar () ->
     DiscordId ->
     CValue ->
+    MVar () ->
     Connection ->
     IO (Either OperationError ())
-modifyUserBalance writeLock did diffVal conn = runExceptT $ do
+modifyUserBalance did diffVal writeLock conn = runExceptT $ do
     let (CValue diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
-    (CValue _ eTok) <- addUserIfNotExists writeLock did conn
+    (CValue _ eTok) <- addUserIfNotExists did writeLock conn
     either handleTxFailure pure
         =<< writeTransact
             writeLock
@@ -133,12 +133,12 @@ modifyUserBalance writeLock did diffVal conn = runExceptT $ do
                 )
 
 transferUserBalance ::
-    MVar () ->
     (DiscordId, CValue) ->
     DiscordId ->
+    MVar () ->
     Connection ->
     IO (Either OperationError ())
-transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT $ do
+transferUserBalance (sourcedid, diffVal) destdid writeLock conn = runExceptT $ do
     let (CValue diffLovelace diffTokens) = diffVal
         nonzeroDiffTokens = Map.filter (/= 0) diffTokens
     either
@@ -148,7 +148,7 @@ transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT $ d
   where
     existentSourceAction :: Int -> Map Text Int -> CValue -> ExceptT OperationError IO ()
     existentSourceAction diffLovelace nonzeroDiffTokens (CValue sourceeVal sourceeTok) = do
-        (CValue _ desteTok) <- addUserIfNotExists writeLock destdid conn
+        (CValue _ desteTok) <- addUserIfNotExists destdid writeLock conn
         either handleTxFailure pure
             =<< writeTransact
                 writeLock
@@ -184,13 +184,13 @@ transferUserBalance writeLock (sourcedid, diffVal) destdid conn = runExceptT $ d
 
 -- adds user if doesn't exist, returning either existing value or value after add
 addUserIfNotExists ::
-    MVar () -> DiscordId -> Connection -> ExceptT OperationError IO CValue
-addUserIfNotExists writeLock did conn =
+    DiscordId -> MVar () -> Connection -> ExceptT OperationError IO CValue
+addUserIfNotExists did writeLock conn =
     either handleNotExists pure =<< lift (getUserBalance did conn)
   where
     handleNotExists :: OperationError -> ExceptT OperationError IO CValue
     handleNotExists eBal =
-        either (handleAddUser eBal) (const $ pure mempty) =<< lift (addNewUser writeLock did conn)
+        either (handleAddUser eBal) (const $ pure mempty) =<< lift (addNewUser did writeLock conn)
 
     handleAddUser ::
         OperationError -> OperationError -> ExceptT OperationError IO CValue
@@ -205,8 +205,8 @@ addUserIfNotExists writeLock did conn =
                 <> eBal
 
 addNewUser ::
-    MVar () -> DiscordId -> Connection -> IO (Either OperationError ())
-addNewUser writeLock did conn =
+    DiscordId -> MVar () -> Connection -> IO (Either OperationError ())
+addNewUser did writeLock conn =
     runExceptT $
         either handleTxFailure pure
             =<< writeTransact
@@ -223,8 +223,8 @@ addNewUser writeLock did conn =
 -- Make sure that these aliases are capitalised!
 -- aliases are case insensitive and always stored as capitals
 addAlias ::
-    MVar () -> Text -> Text -> Connection -> IO (Either OperationError ())
-addAlias writeLock al aid conn =
+    Text -> Text -> MVar () -> Connection -> IO (Either OperationError ())
+addAlias al aid writeLock conn =
     runExceptT $
         either handleTxFailure pure
             =<< writeTransact

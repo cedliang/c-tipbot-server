@@ -3,9 +3,13 @@
 module DbConnections where
 
 import Control.Concurrent
-import Control.Exception
+import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.Except
+import Data.ByteString qualified as B
+import Data.ByteString.Lazy (ByteString)
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Database.SQLite.Simple (
     Connection,
     close,
@@ -34,6 +38,11 @@ bracketEndpointAction ::
     (Connection -> IO (Either OperationError a)) ->
     Servant.Handler (Either OperationError a)
 bracketEndpointAction connsChan = liftIO . bracket (readChan connsChan) (writeChan connsChan)
+
+mk404ServerError :: ByteString -> OperationError -> ServerError
+mk404ServerError description e =
+    let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
+     in err404{errBody = description <> eBS}
 
 data ManagerResources = ManagerResources {connsChan :: Chan Connection, writeLock :: MVar ()}
 

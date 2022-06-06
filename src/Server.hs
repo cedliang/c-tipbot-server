@@ -3,6 +3,7 @@
 
 module Server where
 
+import Control.Concurrent
 import Control.Exception (bracket)
 import Control.Monad
 import Data.Aeson.Text (encodeToLazyText)
@@ -12,6 +13,7 @@ import Data.OpenApi (OpenApi)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Database.SQLite.Simple
 import DbConnections
 import Network.Wai.Handler.Warp
 import Network.Wai.Middleware.Cors (simpleCors)
@@ -103,73 +105,96 @@ tipbotServer manMap = backendServer manMap
         epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
 
 epGetTokenAliases :: ManagersMap -> Int -> Text -> Handler [TokenAlias]
-epGetTokenAliases manMap backendId asid = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either (throwError . mk404ServerError "Could not get token aliases: ") pure
-        =<< bracketEndpointAction connsChan (getTokenAliases asid)
+epGetTokenAliases manMap backendId asid =
+    epAction
+        manMap
+        backendId
+        "Could not get token aliases: "
+        (const $ getTokenAliases asid)
+        pure
 
 epGetAlias :: ManagersMap -> Int -> Text -> Handler TokenAlias
-epGetAlias manMap backendId al = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either (throwError . mk404ServerError "Alias does not exist: ") pure
-        =<< bracketEndpointAction connsChan (getAlias al)
+epGetAlias manMap backendId al =
+    epAction
+        manMap
+        backendId
+        "Alias does not exist: "
+        (const $ getAlias al)
+        pure
 
 epAddAlias :: ManagersMap -> Int -> Text -> Text -> Handler [TokenAlias]
-epAddAlias manMap backendId al asid = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either
-        (throwError . mk404ServerError "Could not add alias: ")
+epAddAlias manMap backendId al asid =
+    epAction
+        manMap
+        backendId
+        "Could not add alias: "
+        (addAlias al asid)
         (const $ epGetTokenAliases manMap backendId asid)
-        =<< bracketEndpointAction connsChan (addAlias writeLock al asid)
 
 epAddToken :: ManagersMap -> Int -> Token -> Handler [Token]
-epAddToken manMap backendId addTok = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either
-        (throwError . mk404ServerError "Could not add token to backend: ")
+epAddToken manMap backendId addTok =
+    epAction
+        manMap
+        backendId
+        "Could not add token to backend: "
+        (addBackendToken addTok)
         (const $ epListTokens manMap backendId)
-        =<< bracketEndpointAction connsChan (addBackendToken writeLock addTok)
 
 epListTokens :: ManagersMap -> Int -> Handler [Token]
-epListTokens manMap backendId = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either (throwError . mk404ServerError "Could not get token list: ") pure
-        =<< bracketEndpointAction connsChan listBackendTokens
+epListTokens manMap backendId =
+    epAction
+        manMap
+        backendId
+        "Could not get token list: "
+        (const listBackendTokens)
+        pure
 
 epUserBalance :: ManagersMap -> Int -> Int -> Handler CValue
-epUserBalance manMap backendId did = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either (throwError . mk404ServerError "UserID does not exist: ") pure
-        =<< bracketEndpointAction connsChan (getUserBalance did)
+epUserBalance manMap backendId did =
+    epAction
+        manMap
+        backendId
+        "UserID does not exist: "
+        (const $ getUserBalance did)
+        pure
 
 epModifyUserBalance :: ManagersMap -> Int -> Int -> CValue -> Handler CValue
-epModifyUserBalance manMap backendId did diffValue = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either
-        (throwError . mk404ServerError "Token transaction failure: ")
+epModifyUserBalance manMap backendId did diffValue =
+    epAction
+        manMap
+        backendId
+        "Token modifybalance failure: "
+        (modifyUserBalance did diffValue)
         (const $ epUserBalance manMap backendId did)
-        =<< bracketEndpointAction
-            connsChan
-            ( modifyUserBalance writeLock did diffValue
-            )
 
 epTransferUserBalance ::
     ManagersMap -> Int -> Int -> Int -> CValue -> Handler [CValue]
-epTransferUserBalance manMap backendId sourceDid destDid diffValue = do
-    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
-    either
-        (throwError . mk404ServerError "Token transaction failure: ")
+epTransferUserBalance manMap backendId sourceDid destDid diffValue =
+    epAction
+        manMap
+        backendId
+        "Token transfer failure: "
+        (transferUserBalance (sourceDid, diffValue) destDid)
         ( const $
             zipWithM
                 ($)
                 (replicate 2 $ epUserBalance manMap backendId)
                 [sourceDid, destDid]
         )
-        =<< bracketEndpointAction
-            connsChan
-            (transferUserBalance writeLock (sourceDid, diffValue) destDid)
 
-mk404ServerError :: ByteString -> OperationError -> ServerError
-mk404ServerError description e =
-    let eBS = B.fromStrict $ T.encodeUtf8 $ T.pack $ show e
-     in err404{errBody = description <> eBS}
+epAction ::
+    ManagersMap ->
+    Int ->
+    ByteString ->
+    ( MVar () ->
+      Connection ->
+      IO (Either OperationError b1)
+    ) ->
+    (b1 -> Handler b2) ->
+    Handler b2
+epAction manMap backendId errStr retrieveAct successAct = do
+    (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+    either
+        (throwError . mk404ServerError errStr)
+        successAct
+        =<< bracketEndpointAction connsChan (retrieveAct writeLock)
