@@ -109,63 +109,63 @@ epGetTokenAliases manMap backendId asid =
     epAction
         manMap
         backendId
-        "Could not get token aliases: "
         (const $ getTokenAliases asid)
         pure
+        "Could not get token aliases: "
 
 epGetAlias :: ManagersMap -> Int -> Text -> Handler TokenAlias
 epGetAlias manMap backendId al =
     epAction
         manMap
         backendId
-        "Alias does not exist: "
         (const $ getAlias al)
         pure
+        "Alias does not exist: "
 
 epAddAlias :: ManagersMap -> Int -> Text -> Text -> Handler [TokenAlias]
 epAddAlias manMap backendId al asid =
     epAction
         manMap
         backendId
-        "Could not add alias: "
         (addAlias al asid)
         (const $ epGetTokenAliases manMap backendId asid)
+        "Could not add alias: "
 
 epAddToken :: ManagersMap -> Int -> Token -> Handler [Token]
 epAddToken manMap backendId addTok =
     epAction
         manMap
         backendId
-        "Could not add token to backend: "
         (addBackendToken addTok)
         (const $ epListTokens manMap backendId)
+        "Could not add token to backend: "
 
 epListTokens :: ManagersMap -> Int -> Handler [Token]
 epListTokens manMap backendId =
     epAction
         manMap
         backendId
-        "Could not get token list: "
         (const listBackendTokens)
         pure
+        "Could not get token list: "
 
 epUserBalance :: ManagersMap -> Int -> Int -> Handler CValue
 epUserBalance manMap backendId did =
     epAction
         manMap
         backendId
-        "UserID does not exist: "
         (const $ getUserBalance did)
         pure
+        "UserID does not exist: "
 
 epModifyUserBalance :: ManagersMap -> Int -> Int -> CValue -> Handler CValue
 epModifyUserBalance manMap backendId did diffValue =
     epAction
         manMap
         backendId
-        "Token modifybalance failure: "
         (modifyUserBalance did diffValue)
         (const $ epUserBalance manMap backendId did)
+        "Token modifybalance failure: "
 
 epTransferUserBalance ::
     ManagersMap -> Int -> Int -> Int -> CValue -> Handler [CValue]
@@ -173,7 +173,6 @@ epTransferUserBalance manMap backendId sourceDid destDid diffValue =
     epAction
         manMap
         backendId
-        "Token transfer failure: "
         (transferUserBalance (sourceDid, diffValue) destDid)
         ( const $
             zipWithM
@@ -181,18 +180,19 @@ epTransferUserBalance manMap backendId sourceDid destDid diffValue =
                 (replicate 2 $ epUserBalance manMap backendId)
                 [sourceDid, destDid]
         )
+        "Token transfer failure: "
 
 epAction ::
     ManagersMap ->
     Int ->
-    ByteString ->
     ( MVar () ->
       Connection ->
       IO (Either OperationError b1)
     ) ->
     (b1 -> Handler b2) ->
+    ByteString ->
     Handler b2
-epAction manMap backendId errStr retrieveAct successAct = do
+epAction manMap backendId retrieveAct successAct errStr = do
     (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
     either
         (throwError . mk404ServerError errStr)
