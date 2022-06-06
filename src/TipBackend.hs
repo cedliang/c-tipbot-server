@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- put individual low level alteration commands in each of the type files, but put high level db interaction endpoints here
@@ -7,11 +7,11 @@ module TipBackend where
 import           Control.Concurrent
 import           Control.Monad.Except
 import           Data.Aeson
-import           Data.Map               as Map (Map)
-import qualified Data.Map               as Map
+import           Data.Map as Map (Map)
+import qualified Data.Map as Map
 import           Data.Map.Merge.Lazy
-import           Data.Text              (Text)
-import qualified Data.Text              as T
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Database.SQLite.Simple
 import           GHC.Generics
 import           TextShow
@@ -19,6 +19,7 @@ import           Types.DBIO
 import           Types.Errors
 import           Types.SchemaOps
 import           Types.SchemaTypes
+import           Control.Exception
 
 data CValue = CValue { lovelace :: Int, tokens :: Map Text Int }
   deriving (Show, Generic)
@@ -179,3 +180,38 @@ addNewUser writeLock did conn = runExceptT
     handleTxFailure :: SQLError -> ExceptT OperationError IO ()
     handleTxFailure = throwError
       . SQLiteError ("Failed to add new user: " <> showt did)
+
+-- Make sure that these aliases are capitalised!
+-- aliases are case insensitive and always stored as capitals
+addAlias
+  :: MVar () -> Text -> Text -> Connection -> IO (Either OperationError ())
+addAlias writeLock al aid conn = runExceptT
+  $ do
+    tx <- writeTransact writeLock conn
+      $ execute conn "INSERT INTO aliases VALUES (?,?)" (T.toUpper al, aid)
+    throwOnLeft handleTxFailure tx pure
+  where
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure = throwError
+      . SQLiteError ("Failed to add alias: " <> T.pack (show al))
+
+getAlias :: Text -> Connection -> IO (Either OperationError TokenAlias)
+getAlias al conn = handle
+  (pure . Left . SQLiteError ("Failed to get alias: " <> al))
+  $ do
+    r <- query
+      conn
+      "SELECT * FROM aliases WHERE alias=(?)"
+      (Only $ T.toUpper al)
+    case length r of
+      1 -> pure $ Right $ head r
+      _ -> pure $ Left $ ConditionFailureError "Alias does not exist."
+
+-- get all the aliases for a particular token name
+getTokenAliases
+  :: Text -> Connection -> IO (Either OperationError [TokenAlias])
+getTokenAliases aid conn = handle
+  (pure . Left . SQLiteError ("Failed to get alias: " <> aid))
+  $ do
+    r <- query conn "SELECT * FROM aliases WHERE assetid=(?)" (Only aid)
+    pure $ Right r

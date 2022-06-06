@@ -9,6 +9,7 @@ import           Control.Monad
 import qualified Data.ByteString as B
 import           Data.ByteString.Lazy (ByteString)
 import qualified Data.Text as T
+import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import           DbConnections
 import           Network.Wai.Handler.Warp
@@ -18,6 +19,7 @@ import           Servant
 import           TipBackend
 import           Types.Errors
 import           Types.SchemaTypes
+import           Types.SchemaOps
 
 servantIO :: IO ()
 servantIO = do
@@ -47,21 +49,58 @@ type TipbotApi = "backend" :> Capture "backendID" Int
       :> (Get '[JSON] CValue :<|> ReqBody '[JSON] CValue
           :> Post '[JSON] CValue :<|> "transfer" :> Capture "destDid" Int
           :> ReqBody '[JSON] CValue :> Post '[JSON] [CValue]) :<|> "tokens"
-      :> (Get '[JSON] [Token]
-          :<|> "add" :> ReqBody '[JSON] Token :> Post '[JSON] [Token]))
+      :> (Get '[JSON] [Token] :<|> "add"
+          :> ReqBody '[JSON] Token :> Post '[JSON] [Token] :<|> "aliases"
+          :> Capture "assetid" Text :> Get '[JSON] [TokenAlias]) :<|> "alias"
+      :> (Capture "tokenalias" Text
+          :> (Get '[JSON] TokenAlias
+              :<|> Capture "tokenname" Text :> Post '[JSON] [TokenAlias])))
 
 server1 :: ManagersMap -> Server TipbotApi
 server1 = backendServer
   where
-    backendServer manMap backendId =
-      userServer manMap backendId :<|> tokenServer manMap backendId
+    backendServer manMap backendId = userServer manMap backendId
+      :<|> tokenServer manMap backendId
+      :<|> aliasServer manMap backendId
 
     userServer manMap backendId did = epUserBalance manMap backendId did
       :<|> epModifyUserBalance manMap backendId did
       :<|> epTransferUserBalance manMap backendId did
 
-    tokenServer manMap backendId =
-      epListTokens manMap backendId :<|> epAddToken manMap backendId
+    tokenServer manMap backendId = epListTokens manMap backendId
+      :<|> epAddToken manMap backendId
+      :<|> epGetTokenAliases manMap backendId
+
+    aliasServer manMap backendId al =
+      epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
+
+epGetTokenAliases :: ManagersMap -> Int -> Text -> Handler [TokenAlias]
+epGetTokenAliases manMap backendId asid = do
+  (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+  tokAliases <- bracketEndpointAction connsChan $ getTokenAliases asid
+  throwOnLeft
+    (throwError . mk404ServerError "Could not get token aliases: ")
+    tokAliases
+    pure
+
+epGetAlias :: ManagersMap -> Int -> Text -> Handler TokenAlias
+epGetAlias manMap backendId al = do
+  (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+  tokAlias <- bracketEndpointAction connsChan $ getAlias al
+  throwOnLeft
+    (throwError . mk404ServerError "Alias does not exist: ")
+    tokAlias
+    pure
+
+epAddAlias :: ManagersMap -> Int -> Text -> Text -> Handler [TokenAlias]
+epAddAlias manMap backendId al asid = do
+  (connsChan, writeLock) <- handlerManMap existentManagerIds manMap backendId
+  addAliasTx <- bracketEndpointAction connsChan $ addAlias writeLock al asid
+  throwOnLeft
+    (throwError . mk404ServerError "Could not add alias: ")
+    addAliasTx
+    $ const
+    $ epGetTokenAliases manMap backendId asid
 
 epAddToken :: ManagersMap -> Int -> Token -> Handler [Token]
 epAddToken manMap backendId addTok = do

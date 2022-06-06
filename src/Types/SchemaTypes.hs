@@ -22,11 +22,16 @@ instance FromRow Token where
 instance ToRow Token where
   toRow (Token id_ name_ decimals_) = toRow (id_, name_, decimals_)
 
-data TokenAlias = TokenAlias { alias :: Text, assetid :: Int }
-  deriving (Eq, Show)
+data TokenAlias = TokenAlias { alias :: Text, assetid :: Text }
+  deriving (Eq, Show, Generic)
 
 instance FromRow TokenAlias where
   fromRow = TokenAlias <$> field <*> field
+
+instance ToJSON TokenAlias where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON TokenAlias
 
 instance ToRow TokenAlias where
   toRow (TokenAlias alias_ assetid_) = toRow (alias_, assetid_)

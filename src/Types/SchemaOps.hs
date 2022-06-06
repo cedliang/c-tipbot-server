@@ -2,7 +2,6 @@
 
 module Types.SchemaOps where
 
-import           Control.Concurrent.MVar
 import           Control.Exception (bracket, handle)
 import           Control.Monad.Except
 import           Data.Map as Map (Map)
@@ -10,34 +9,7 @@ import qualified Data.Map as Map
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Database.SQLite.Simple
-import           Types.DBIO
-import           Types.Errors
 import           Types.SchemaTypes
-
--- Make sure that these aliases are capitalised!
-addAlias
-  :: MVar () -> TokenAlias -> Connection -> IO (Either OperationError ())
-addAlias writeLock alias conn = runExceptT
-  $ do
-    tx <- writeTransact writeLock conn
-      $ execute conn "INSERT INTO alias VALUES (?)" alias
-    throwOnLeft handleTxFailure tx pure
-  where
-    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
-    handleTxFailure = throwError
-      . SQLiteError ("Failed to add alias: " <> T.pack (show alias))
-
-getAlias :: Text -> Connection -> IO (Either OperationError TokenAlias)
-getAlias alias conn = handle
-  (pure . Left . SQLiteError ("Failed to get alias: " <> alias))
-  $ do
-    r <- query
-      conn
-      "SELECT * FROM alias WHERE alias=(?)"
-      (Only $ T.toUpper alias)
-    case length r of
-      1 -> pure $ Right $ head r
-      _ -> pure $ Left $ ConditionFailureError "Alias does not exist."
 
 -- low level, with no bracketing or error handling. Should never be called directly by any user facing element.
 modifyLovelace :: Bool -> Int -> DiscordId -> Connection -> IO ()
