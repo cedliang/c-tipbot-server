@@ -19,7 +19,9 @@ import           Servant
 import           TipBackend
 import           Types.Errors
 import           Types.SchemaTypes
-import           Types.SchemaOps
+import           Data.Aeson.Text (encodeToLazyText)
+import           Servant.OpenApi
+import           Data.OpenApi (OpenApi)
 
 servantIO :: IO ()
 servantIO = do
@@ -42,7 +44,22 @@ serveSettings =
     defaultSettings
 
 servApp :: ManagersMap -> Application
-servApp = serve (Proxy :: Proxy TipbotApi) . server1
+servApp manMap = serve combinedProxy $ combinedServer manMap
+
+tipbotProxy :: Proxy TipbotApi
+tipbotProxy = Proxy
+
+combinedProxy :: Proxy CombinedApi
+combinedProxy = Proxy
+
+type CombinedApi = ApiDocApi :<|> TipbotApi
+
+type ApiDocApi = "swagger.json" :> Get '[JSON] OpenApi
+
+combinedServer :: ManagersMap -> Server CombinedApi
+combinedServer manMap = apiServer manMap :<|> tipbotServer manMap
+  where
+    apiServer _ = pure $ toOpenApi tipbotProxy
 
 type TipbotApi = "backend" :> Capture "backendID" Int
   :> ("user" :> Capture "userdid" Int
@@ -56,8 +73,8 @@ type TipbotApi = "backend" :> Capture "backendID" Int
           :> (Get '[JSON] TokenAlias
               :<|> Capture "tokenname" Text :> Post '[JSON] [TokenAlias])))
 
-server1 :: ManagersMap -> Server TipbotApi
-server1 = backendServer
+tipbotServer :: ManagersMap -> Server TipbotApi
+tipbotServer manMap = backendServer manMap
   where
     backendServer manMap backendId = userServer manMap backendId
       :<|> tokenServer manMap backendId

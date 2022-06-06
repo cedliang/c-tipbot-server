@@ -20,6 +20,7 @@ import           Types.Errors
 import           Types.SchemaOps
 import           Types.SchemaTypes
 import           Control.Exception
+import           Data.OpenApi
 
 data CValue = CValue { lovelace :: Int, tokens :: Map Text Int }
   deriving (Show, Generic)
@@ -48,6 +49,8 @@ instance Semigroup CValue where
 
 instance Monoid CValue where
   mempty = CValue 0 Map.empty
+
+instance ToSchema CValue
 
 listBackendTokens :: Connection -> IO (Either OperationError [Token])
 listBackendTokens conn = runExceptT
