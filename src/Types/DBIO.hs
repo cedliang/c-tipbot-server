@@ -7,13 +7,13 @@ import Database.SQLite.Simple
 import Types.Errors
 
 writeTransact ::
-    MVar () ->
-    Connection ->
-    IO () ->
-    ExceptT OperationError IO (Either SQLError ())
+  MVar () ->
+  Connection ->
+  IO () ->
+  ExceptT OperationError IO (Either SQLError ())
 writeTransact writeLock conn =
-    lift
-        . try
-        . bracket (takeMVar writeLock) (putMVar writeLock)
-        . const
-        . withImmediateTransaction conn
+  lift
+    . try
+    . bracket (takeMVar writeLock) (putMVar writeLock)
+    . const
+    . withImmediateTransaction conn

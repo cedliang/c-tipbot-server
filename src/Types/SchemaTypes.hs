@@ -10,58 +10,58 @@ import Database.SQLite.Simple
 import GHC.Generics
 
 data Token = Token {id :: Text, name :: Text, decimals :: Int}
-    deriving (Show, Generic)
+  deriving (Show, Generic)
 
 instance ToJSON Token where
-    toEncoding = genericToEncoding defaultOptions
+  toEncoding = genericToEncoding defaultOptions
 
 instance FromJSON Token
 
 instance FromRow Token where
-    fromRow = Token <$> field <*> field <*> field
+  fromRow = Token <$> field <*> field <*> field
 
 instance ToRow Token where
-    toRow (Token id_ name_ decimals_) = toRow (id_, name_, decimals_)
+  toRow (Token id_ name_ decimals_) = toRow (id_, name_, decimals_)
 
 instance ToSchema Token
 
 data TokenAlias = TokenAlias {alias :: Text, assetid :: Text}
-    deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance FromRow TokenAlias where
-    fromRow = TokenAlias <$> field <*> field
+  fromRow = TokenAlias <$> field <*> field
 
 instance ToJSON TokenAlias where
-    toEncoding = genericToEncoding defaultOptions
+  toEncoding = genericToEncoding defaultOptions
 
 instance FromJSON TokenAlias
 
 instance ToRow TokenAlias where
-    toRow (TokenAlias alias_ assetid_) = toRow (alias_, assetid_)
+  toRow (TokenAlias alias_ assetid_) = toRow (alias_, assetid_)
 
 instance ToSchema TokenAlias
 
 type DiscordId = Int
 
 data UserRecord = UserRecord {did :: DiscordId, lovelace_balance :: Int}
-    deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance FromRow UserRecord where
-    fromRow = UserRecord <$> field <*> field
+  fromRow = UserRecord <$> field <*> field
 
 instance ToRow UserRecord where
-    toRow (UserRecord did_ lovelace_balance_) = toRow (did_, lovelace_balance_)
+  toRow (UserRecord did_ lovelace_balance_) = toRow (did_, lovelace_balance_)
 
 instance ToSchema UserRecord
 
 data UserBalance = UserBalance {token_id :: Text, user_did :: Int, amount :: Int}
-    deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance FromRow UserBalance where
-    fromRow = UserBalance <$> field <*> field <*> field
+  fromRow = UserBalance <$> field <*> field <*> field
 
 instance ToRow UserBalance where
-    toRow (UserBalance token_id_ user_did_ amount_) =
-        toRow (token_id_, user_did_, amount_)
+  toRow (UserBalance token_id_ user_did_ amount_) =
+    toRow (token_id_, user_did_, amount_)
 
 instance ToSchema UserBalance
