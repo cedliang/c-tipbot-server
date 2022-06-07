@@ -14,7 +14,7 @@ CREATE TABLE aliases (
 CREATE TABLE user (
   did INTEGER PRIMARY KEY CHECK(did >= 0),
   lovelace_balance INTEGER NOT NULL CHECK(lovelace_balance >= 0) DEFAULT 0,
-  c_addr TEXT NOT NULL
+  c_addr TEXT NOT NULL UNIQUE
 );
 CREATE TABLE user_balance (
   token_id TEXT NOT NULL,
