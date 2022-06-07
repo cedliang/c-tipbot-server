@@ -68,10 +68,6 @@ type TipbotApi =
                            :> Post '[JSON] CValue
                      )
                   :<|> "transfer"
-                  :> Capture "destDid" Int
-                  :> ReqBody '[JSON] CValue
-                  :> Post '[JSON] [CValue]
-                  :<|> "transfer2"
                   :> ReqBody '[JSON] [UserCValue]
                   :> Post '[JSON] [UserCValue]
                   :<|> "record"
@@ -112,7 +108,6 @@ tipbotServer manMap = backendServer manMap
     userServer manMap backendId did =
       userBalanceServer manMap backendId did
         :<|> epTransferUserBalance manMap backendId did
-        :<|> epTransferUserBalance2 manMap backendId did
         :<|> userRecordServer manMap backendId did
 
     userBalanceServer manMap backendId did =
@@ -131,12 +126,12 @@ tipbotServer manMap = backendServer manMap
     aliasServer manMap backendId al =
       epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
 
-epTransferUserBalance2 :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]
-epTransferUserBalance2 manMap backendId sourceDid ldestcvalue =
+epTransferUserBalance :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]
+epTransferUserBalance manMap backendId sourceDid ldestcvalue =
   epAction
     manMap
     backendId
-    (transferBalance sourceDid ldestcvalue)
+    (transferUserBalance sourceDid ldestcvalue)
     pure
     "Token transfer failure: "
 
@@ -229,21 +224,6 @@ epModifyUserBalance manMap backendId did diffValue =
     (modifyUserBalance did diffValue)
     (const $ epUserBalance manMap backendId did)
     "Token modifybalance failure: "
-
-epTransferUserBalance ::
-  ManagersMap -> Int -> Int -> Int -> CValue -> Handler [CValue]
-epTransferUserBalance manMap backendId sourceDid destDid diffValue =
-  epAction
-    manMap
-    backendId
-    (transferUserBalance (sourceDid, diffValue) destDid)
-    ( const $
-        zipWithM
-          ($)
-          (replicate 2 $ epUserBalance manMap backendId)
-          [sourceDid, destDid]
-    )
-    "Token transfer failure: "
 
 epAction ::
   ManagersMap ->

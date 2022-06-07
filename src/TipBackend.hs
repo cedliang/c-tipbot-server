@@ -188,13 +188,13 @@ modifyUserBalance did diffVal writeLock conn = runExceptT $ do
               <> "; tx failed."
           )
 
-transferBalance ::
+transferUserBalance ::
   DiscordId ->
   [UserCValue] ->
   MVar () ->
   Connection ->
   IO (Either OperationError [UserCValue])
-transferBalance sourcedid ldestcvalue writeLock conn = runExceptT $ do
+transferUserBalance sourcedid ldestcvalue writeLock conn = runExceptT $ do
   desteithercvals <- mapM (\ucv -> lift $ getUserBalance (udid ucv) conn) ldestcvalue
   let (desterrs, destcvals) = partitionEithers desteithercvals
       desteToks = map tokens destcvals
@@ -254,70 +254,6 @@ transferBalance sourcedid ldestcvalue writeLock conn = runExceptT $ do
         . SQLiteError
           ( "Could not transferMult: tx failed.\nSource did: "
               <> showt sourcedid
-          )
-
-transferUserBalance ::
-  (DiscordId, CValue) ->
-  DiscordId ->
-  MVar () ->
-  Connection ->
-  IO (Either OperationError ())
-transferUserBalance (sourcedid, diffVal) destdid writeLock conn = runExceptT $ do
-  let (CValue diffLovelace diffTokens) = diffVal
-      nonzeroDiffTokens = Map.filter (/= 0) diffTokens
-  either
-    handleNonExistentSource
-    (existentSourceAction diffLovelace nonzeroDiffTokens)
-    =<< lift (getUserBalance sourcedid conn)
-  where
-    existentSourceAction :: Int -> Map Text Int -> CValue -> ExceptT OperationError IO ()
-    existentSourceAction diffLovelace nonzeroDiffTokens (CValue sourceeVal sourceeTok) = do
-      lift (getUserBalance destdid conn)
-        >>= either
-          handleNonExistentDest
-          ( \(CValue _ desteTok) ->
-              either handleTxFailure pure
-                =<< writeTransact
-                  writeLock
-                  conn
-                  ( do
-                      modifyLovelace True diffLovelace sourcedid conn
-                      modifyLovelace False diffLovelace destdid conn
-                      modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
-                      modifyTokens False nonzeroDiffTokens destdid desteTok conn
-                  )
-          )
-
-    handleNonExistentSource :: OperationError -> ExceptT OperationError IO ()
-    handleNonExistentSource e =
-      throwError $
-        ConditionFailureError
-          ( "Could not transferUserBalance: source user "
-              <> showt sourcedid
-              <> " does not exist."
-          )
-          <> e
-
-    handleNonExistentDest :: OperationError -> ExceptT OperationError IO ()
-    handleNonExistentDest e =
-      throwError $
-        ConditionFailureError
-          ( "Could not transferUserBalance: dest user "
-              <> showt destdid
-              <> " does not exist."
-          )
-          <> e
-
-    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
-    handleTxFailure =
-      throwError
-        . SQLiteError
-          ( "Could not transferUserBalance: tx failed.\nSource did: "
-              <> showt sourcedid
-              <> "\nDest did: "
-              <> showt destdid
-              <> "\nValue: "
-              <> T.pack (show diffVal)
           )
 
 -- Make sure that these aliases are capitalised!
