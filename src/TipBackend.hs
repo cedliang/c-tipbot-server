@@ -66,13 +66,11 @@ instance FromJSON UserCValue
 
 instance ToSchema UserCValue
 
-listAssignedAddresses :: Connection -> IO (Either OperationError [Text])
-listAssignedAddresses conn =
+listUserRecords :: Connection -> IO (Either OperationError [UserRecord])
+listUserRecords conn =
   handle
     (pure . Left . SQLiteError "Failed to get alias assigned addresses")
-    $ do
-      r <- query_ conn "SELECT c_addr FROM user"
-      pure $ Right $ map rowtext r
+    (Right <$> query_ conn "SELECT * FROM user")
 
 listBackendTokens :: Connection -> IO (Either OperationError [Token])
 listBackendTokens conn =

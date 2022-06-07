@@ -92,8 +92,8 @@ type TipbotApi =
                            :> Post '[JSON] [TokenAlias]
                      )
               )
-             :<|> "assignedaddresses"
-           :> Get '[JSON] [Text]
+             :<|> "userrecords"
+           :> Get '[JSON] [UserRecord]
        )
 
 tipbotServer :: ManagersMap -> Server TipbotApi
@@ -103,7 +103,7 @@ tipbotServer manMap = backendServer manMap
       userServer manMap backendId
         :<|> tokenServer manMap backendId
         :<|> aliasServer manMap backendId
-        :<|> epGetAssignedAddresses manMap backendId
+        :<|> epGetAllUserRecords manMap backendId
 
     userServer manMap backendId did =
       userBalanceServer manMap backendId did
@@ -135,12 +135,12 @@ epTransferUserBalance manMap backendId sourceDid ldestcvalue =
     pure
     "Token transfer failure: "
 
-epGetAssignedAddresses :: ManagersMap -> Int -> Handler [Text]
-epGetAssignedAddresses manMap backendId =
+epGetAllUserRecords :: ManagersMap -> Int -> Handler [UserRecord]
+epGetAllUserRecords manMap backendId =
   epAction
     manMap
     backendId
-    (const listAssignedAddresses)
+    (const listUserRecords)
     pure
     "Could not get assigned address list."
 
