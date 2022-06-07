@@ -31,7 +31,7 @@ servantIO = do
   runSettings serveSettings $ (simpleCors . logStdoutDev) $ servApp manMap
 
 existentManagerIds :: [Int]
-existentManagerIds = [1, 2, 3]
+existentManagerIds = [1 .. 10]
 
 data Config = Config {hostPort :: Int, hostAddr :: HostPreference}
   deriving (Show, Eq)
