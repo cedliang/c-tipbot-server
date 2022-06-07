@@ -43,14 +43,19 @@ instance ToSchema TokenAlias
 
 type DiscordId = Int
 
-data UserRecord = UserRecord {did :: DiscordId, lovelace_balance :: Int}
+data UserRecord = UserRecord {did :: DiscordId, lovelace_balance :: Int, c_addr :: Text}
   deriving (Eq, Show, Generic)
 
+instance ToJSON UserRecord where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON UserRecord
+
 instance FromRow UserRecord where
-  fromRow = UserRecord <$> field <*> field
+  fromRow = UserRecord <$> field <*> field <*> field
 
 instance ToRow UserRecord where
-  toRow (UserRecord did_ lovelace_balance_) = toRow (did_, lovelace_balance_)
+  toRow (UserRecord did_ lovelace_balance_ c_addr_) = toRow (did_, lovelace_balance_, c_addr_)
 
 instance ToSchema UserRecord
 

@@ -62,23 +62,35 @@ combinedServer manMap = apiServer manMap :<|> tipbotServer manMap
 type TipbotApi =
   "backend" :> Capture "backendID" Int
     :> ( "user" :> Capture "userdid" Int
-           :> ( Get '[JSON] CValue :<|> ReqBody '[JSON] CValue
-                  :> Post '[JSON] CValue :<|> "transfer"
-                  :> Capture "destDid" Int
-                  :> ReqBody '[JSON] CValue
-                  :> Post '[JSON] [CValue]
+           :> ( "balance"
+                  :> ( Get '[JSON] CValue
+                         :<|> ReqBody '[JSON] CValue
+                           :> Post '[JSON] CValue
+                     )
+                  :<|> "transfer"
+                    :> Capture "destDid" Int
+                    :> ReqBody '[JSON] CValue
+                    :> Post '[JSON] [CValue]
+                  :<|> "record"
+                    :> ( Capture "c_addr" Text
+                           :> Post '[JSON] UserRecord
+                           :<|> Get '[JSON] UserRecord
+                       )
               )
              :<|> "tokens"
-           :> ( Get '[JSON] [Token] :<|> "add"
-                  :> ReqBody '[JSON] Token
-                  :> Post '[JSON] [Token] :<|> "aliases"
-                  :> Capture "assetid" Text
-                  :> Get '[JSON] [TokenAlias]
+           :> ( Get '[JSON] [Token]
+                  :<|> "add"
+                    :> ReqBody '[JSON] Token
+                    :> Post '[JSON] [Token]
+                  :<|> "aliases"
+                    :> Capture "assetid" Text
+                    :> Get '[JSON] [TokenAlias]
               )
              :<|> "alias"
            :> ( Capture "tokenalias" Text
                   :> ( Get '[JSON] TokenAlias
-                         :<|> Capture "tokenname" Text :> Post '[JSON] [TokenAlias]
+                         :<|> Capture "tokenname" Text
+                           :> Post '[JSON] [TokenAlias]
                      )
               )
        )
@@ -92,9 +104,17 @@ tipbotServer manMap = backendServer manMap
         :<|> aliasServer manMap backendId
 
     userServer manMap backendId did =
+      userBalanceServer manMap backendId did
+        :<|> epTransferUserBalance manMap backendId did
+        :<|> userRecordServer manMap backendId did
+
+    userBalanceServer manMap backendId did =
       epUserBalance manMap backendId did
         :<|> epModifyUserBalance manMap backendId did
-        :<|> epTransferUserBalance manMap backendId did
+
+    userRecordServer manMap backendId did =
+      epAddUserRecord manMap backendId did
+        :<|> epGetUserRecord manMap backendId did
 
     tokenServer manMap backendId =
       epListTokens manMap backendId
@@ -103,6 +123,24 @@ tipbotServer manMap = backendServer manMap
 
     aliasServer manMap backendId al =
       epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
+
+epAddUserRecord :: ManagersMap -> Int -> Int -> Text -> Handler UserRecord
+epAddUserRecord manMap backendId did c_addr =
+  epAction
+    manMap
+    backendId
+    (addNewUser did c_addr)
+    (const $ epGetUserRecord manMap backendId did)
+    "Could not add user: "
+
+epGetUserRecord :: ManagersMap -> Int -> Int -> Handler UserRecord
+epGetUserRecord manMap backendId did =
+  epAction
+    manMap
+    backendId
+    (const $ getUserRecord did)
+    pure
+    "Could not get user record: "
 
 epGetTokenAliases :: ManagersMap -> Int -> Text -> Handler [TokenAlias]
 epGetTokenAliases manMap backendId asid =

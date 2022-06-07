@@ -80,6 +80,31 @@ addBackendToken tok writeLock conn =
       throwError
         . SQLiteError ("Failed to add new token: " <> T.pack (show tok))
 
+getUserRecord :: DiscordId -> Connection -> IO (Either OperationError UserRecord)
+getUserRecord did conn = handle
+  (pure . Left . SQLiteError ("Failed to get UserRecord: " <> showt did))
+  $ do
+    r <- query conn "SELECT * FROM user WHERE did=(?)" (Only did)
+    case length r of
+      1 -> pure $ Right $ head r
+      _ -> pure $ Left $ ConditionFailureError "User does not exist."
+
+addNewUser ::
+  DiscordId -> Text -> MVar () -> Connection -> IO (Either OperationError ())
+addNewUser did c_addr writeLock conn =
+  runExceptT $
+    either handleTxFailure pure
+      =<< writeTransact
+        writeLock
+        conn
+        ( execute conn "INSERT INTO user (did, c_addr) VALUES (?,?)" (did, c_addr)
+        )
+  where
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure =
+      throwError
+        . SQLiteError ("Failed to add new user: " <> showt did)
+
 getUserBalance :: DiscordId -> Connection -> IO (Either OperationError CValue)
 getUserBalance did conn = runExceptT $ do
   rlovelace <-
@@ -111,16 +136,30 @@ modifyUserBalance ::
 modifyUserBalance did diffVal writeLock conn = runExceptT $ do
   let (CValue diffLovelace diffTokens) = diffVal
       nonzeroDiffTokens = Map.filter (/= 0) diffTokens
-  (CValue _ eTok) <- addUserIfNotExists did writeLock conn
-  either handleTxFailure pure
-    =<< writeTransact
-      writeLock
-      conn
-      ( do
-          modifyLovelace False diffLovelace did conn
-          modifyTokens False nonzeroDiffTokens did eTok conn
+  lift (getUserBalance did conn)
+    >>= either
+      handleNonExistentDest
+      ( \(CValue _ eTok) ->
+          either handleTxFailure pure
+            =<< writeTransact
+              writeLock
+              conn
+              ( do
+                  modifyLovelace False diffLovelace did conn
+                  modifyTokens False nonzeroDiffTokens did eTok conn
+              )
       )
   where
+    handleNonExistentDest :: OperationError -> ExceptT OperationError IO ()
+    handleNonExistentDest e =
+      throwError $
+        ConditionFailureError
+          ( "Could not transferUserBalance: dest user "
+              <> showt did
+              <> " does not exist."
+          )
+          <> e
+
     handleTxFailure :: SQLError -> ExceptT OperationError IO ()
     handleTxFailure =
       throwError
@@ -148,16 +187,20 @@ transferUserBalance (sourcedid, diffVal) destdid writeLock conn = runExceptT $ d
   where
     existentSourceAction :: Int -> Map Text Int -> CValue -> ExceptT OperationError IO ()
     existentSourceAction diffLovelace nonzeroDiffTokens (CValue sourceeVal sourceeTok) = do
-      (CValue _ desteTok) <- addUserIfNotExists destdid writeLock conn
-      either handleTxFailure pure
-        =<< writeTransact
-          writeLock
-          conn
-          ( do
-              modifyLovelace True diffLovelace sourcedid conn
-              modifyLovelace False diffLovelace destdid conn
-              modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
-              modifyTokens False nonzeroDiffTokens destdid desteTok conn
+      lift (getUserBalance destdid conn)
+        >>= either
+          handleNonExistentDest
+          ( \(CValue _ desteTok) ->
+              either handleTxFailure pure
+                =<< writeTransact
+                  writeLock
+                  conn
+                  ( do
+                      modifyLovelace True diffLovelace sourcedid conn
+                      modifyLovelace False diffLovelace destdid conn
+                      modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
+                      modifyTokens False nonzeroDiffTokens destdid desteTok conn
+                  )
           )
 
     handleNonExistentSource :: OperationError -> ExceptT OperationError IO ()
@@ -166,6 +209,16 @@ transferUserBalance (sourcedid, diffVal) destdid writeLock conn = runExceptT $ d
         ConditionFailureError
           ( "Could not transferUserBalance: source user "
               <> showt sourcedid
+              <> " does not exist."
+          )
+          <> e
+
+    handleNonExistentDest :: OperationError -> ExceptT OperationError IO ()
+    handleNonExistentDest e =
+      throwError $
+        ConditionFailureError
+          ( "Could not transferUserBalance: dest user "
+              <> showt destdid
               <> " does not exist."
           )
           <> e
@@ -181,44 +234,6 @@ transferUserBalance (sourcedid, diffVal) destdid writeLock conn = runExceptT $ d
               <> "\nValue: "
               <> T.pack (show diffVal)
           )
-
--- adds user if doesn't exist, returning either existing value or value after add
-addUserIfNotExists ::
-  DiscordId -> MVar () -> Connection -> ExceptT OperationError IO CValue
-addUserIfNotExists did writeLock conn =
-  either handleNotExists pure =<< lift (getUserBalance did conn)
-  where
-    handleNotExists :: OperationError -> ExceptT OperationError IO CValue
-    handleNotExists eBal =
-      either (handleAddUser eBal) (const $ pure mempty) =<< lift (addNewUser did writeLock conn)
-
-    handleAddUser ::
-      OperationError -> OperationError -> ExceptT OperationError IO CValue
-    handleAddUser eBal e =
-      throwError $
-        ConditionFailureError
-          ( "Could not modifyUserBalance on did "
-              <> showt did
-              <> ": existing record could not be found, and insert operation failed."
-          )
-          <> e
-          <> eBal
-
-addNewUser ::
-  DiscordId -> MVar () -> Connection -> IO (Either OperationError ())
-addNewUser did writeLock conn =
-  runExceptT $
-    either handleTxFailure pure
-      =<< writeTransact
-        writeLock
-        conn
-        ( execute conn "INSERT INTO user (did) VALUES (?)" (Only did)
-        )
-  where
-    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
-    handleTxFailure =
-      throwError
-        . SQLiteError ("Failed to add new user: " <> showt did)
 
 -- Make sure that these aliases are capitalised!
 -- aliases are case insensitive and always stored as capitals
