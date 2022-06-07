@@ -8,6 +8,7 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad.Except
 import Data.Aeson
+import Data.Either
 import Data.Map as Map (Map)
 import Data.Map qualified as Map
 import Data.Map.Merge.Lazy
@@ -56,10 +57,27 @@ instance Monoid CValue where
 
 instance ToSchema CValue
 
+data UserCValue = UserCValue {udid :: DiscordId, cvalue :: CValue} deriving (Show, Eq, Generic)
+
+instance ToJSON UserCValue where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON UserCValue
+
+instance ToSchema UserCValue
+
+listAssignedAddresses :: Connection -> IO (Either OperationError [Text])
+listAssignedAddresses conn =
+  handle
+    (pure . Left . SQLiteError "Failed to get alias assigned addresses")
+    $ do
+      r <- query_ conn "SELECT c_addr FROM user"
+      pure $ Right $ map rowtext r
+
 listBackendTokens :: Connection -> IO (Either OperationError [Token])
 listBackendTokens conn =
   runExceptT $
-    lift (query_ conn "SELECT * FROM tokens" :: IO [Token])
+    lift (query_ conn "SELECT * FROM tokens")
 
 addBackendToken ::
   Token -> MVar () -> Connection -> IO (Either OperationError ())
@@ -121,8 +139,7 @@ getUserBalance did conn = runExceptT $ do
       ( query
           conn
           "SELECT token_id, amount FROM user_balance WHERE user_did=(?)"
-          (Only did) ::
-          IO [(Text, Int)]
+          (Only did)
       )
   let (Only lovelaceamt) = head rlovelace
   pure $ CValue lovelaceamt $ Map.fromList rtokens
@@ -169,6 +186,74 @@ modifyUserBalance did diffVal writeLock conn = runExceptT $ do
               <> "\nValue: "
               <> T.pack (show diffVal)
               <> "; tx failed."
+          )
+
+transferBalance ::
+  DiscordId ->
+  [UserCValue] ->
+  MVar () ->
+  Connection ->
+  IO (Either OperationError [UserCValue])
+transferBalance sourcedid ldestcvalue writeLock conn = runExceptT $ do
+  desteithercvals <- mapM (\ucv -> lift $ getUserBalance (udid ucv) conn) ldestcvalue
+  let (desterrs, destcvals) = partitionEithers desteithercvals
+      desteToks = map tokens destcvals
+  unless (null desterrs) $
+    throwError $
+      ConditionFailureError "Could not transferMult: dest user does not exist. "
+        <> mconcat desterrs
+  lift (getUserBalance sourcedid conn)
+    >>= either
+      handleNonExistentSource
+      ( \(CValue _ sourceeTok) -> do
+          r <-
+            writeTransact
+              writeLock
+              conn
+              $ zipWithM_
+                ( \destcval desteTok ->
+                    singleTransfer
+                      sourcedid
+                      destcval
+                      sourceeTok
+                      desteTok
+                      conn
+                )
+                ldestcvalue
+                desteToks
+          either handleTxFailure pure r
+      )
+  let afterdids = (sourcedid :) $ map udid ldestcvalue
+  newbalances <- mapM (\adid -> lift $ getUserBalance adid conn) afterdids
+  let (aftererrs, aftercvals) = partitionEithers newbalances
+  pure $ zipWith UserCValue afterdids aftercvals
+  where
+    singleTransfer :: DiscordId -> UserCValue -> Map Text Int -> Map Text Int -> Connection -> IO ()
+    singleTransfer sourcedid (UserCValue destdid diffVal) sourceeTok desteTok conn =
+      do
+        let (CValue diffLovelace diffTokens) = diffVal
+            nonzeroDiffTokens = Map.filter (/= 0) diffTokens
+        modifyLovelace True diffLovelace sourcedid conn
+        modifyLovelace False diffLovelace destdid conn
+        modifyTokens True nonzeroDiffTokens sourcedid sourceeTok conn
+        modifyTokens False nonzeroDiffTokens destdid desteTok conn
+
+    handleNonExistentSource :: OperationError -> ExceptT OperationError IO ()
+    handleNonExistentSource e =
+      throwError $
+        ConditionFailureError
+          ( "Could not transferMult: source user "
+              <> showt sourcedid
+              <> " does not exist."
+          )
+          <> e
+
+    handleTxFailure :: SQLError -> ExceptT OperationError IO ()
+    handleTxFailure =
+      throwError
+        . SQLiteError
+          ( "Could not transferMult: tx failed.\nSource did: "
+              <> showt sourcedid
           )
 
 transferUserBalance ::

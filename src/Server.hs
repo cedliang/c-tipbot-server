@@ -68,14 +68,17 @@ type TipbotApi =
                            :> Post '[JSON] CValue
                      )
                   :<|> "transfer"
-                    :> Capture "destDid" Int
-                    :> ReqBody '[JSON] CValue
-                    :> Post '[JSON] [CValue]
+                  :> Capture "destDid" Int
+                  :> ReqBody '[JSON] CValue
+                  :> Post '[JSON] [CValue]
+                  :<|> "transfer2"
+                  :> ReqBody '[JSON] [UserCValue]
+                  :> Post '[JSON] [UserCValue]
                   :<|> "record"
-                    :> ( Capture "c_addr" Text
-                           :> Post '[JSON] UserRecord
-                           :<|> Get '[JSON] UserRecord
-                       )
+                  :> ( Capture "c_addr" Text
+                         :> Post '[JSON] UserRecord
+                         :<|> Get '[JSON] UserRecord
+                     )
               )
              :<|> "tokens"
            :> ( Get '[JSON] [Token]
@@ -93,6 +96,8 @@ type TipbotApi =
                            :> Post '[JSON] [TokenAlias]
                      )
               )
+             :<|> "assignedaddresses"
+           :> Get '[JSON] [Text]
        )
 
 tipbotServer :: ManagersMap -> Server TipbotApi
@@ -102,10 +107,12 @@ tipbotServer manMap = backendServer manMap
       userServer manMap backendId
         :<|> tokenServer manMap backendId
         :<|> aliasServer manMap backendId
+        :<|> epGetAssignedAddresses manMap backendId
 
     userServer manMap backendId did =
       userBalanceServer manMap backendId did
         :<|> epTransferUserBalance manMap backendId did
+        :<|> epTransferUserBalance2 manMap backendId did
         :<|> userRecordServer manMap backendId did
 
     userBalanceServer manMap backendId did =
@@ -123,6 +130,24 @@ tipbotServer manMap = backendServer manMap
 
     aliasServer manMap backendId al =
       epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
+
+epTransferUserBalance2 :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]
+epTransferUserBalance2 manMap backendId sourceDid ldestcvalue =
+  epAction
+    manMap
+    backendId
+    (transferBalance sourceDid ldestcvalue)
+    pure
+    "Token transfer failure: "
+
+epGetAssignedAddresses :: ManagersMap -> Int -> Handler [Text]
+epGetAssignedAddresses manMap backendId =
+  epAction
+    manMap
+    backendId
+    (const listAssignedAddresses)
+    pure
+    "Could not get assigned address list."
 
 epAddUserRecord :: ManagersMap -> Int -> Int -> Text -> Handler UserRecord
 epAddUserRecord manMap backendId did c_addr =

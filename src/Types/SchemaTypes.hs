@@ -70,3 +70,8 @@ instance ToRow UserBalance where
     toRow (token_id_, user_did_, amount_)
 
 instance ToSchema UserBalance
+
+newtype RowText = RowText {rowtext :: Text}
+
+instance FromRow RowText where
+  fromRow = RowText <$> field
