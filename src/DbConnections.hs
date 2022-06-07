@@ -56,7 +56,7 @@ mkManagerResources numConns managerid =
 
 mkManagersMap :: [Int] -> IO ManagersMap
 mkManagersMap lids = forM lids $
-  \lid -> (lid,) <$> mkManagerResources 2 lid
+  \lid -> (lid,) <$> mkManagerResources 5 lid
 
 getManResources :: ManagersMap -> Int -> Maybe (Chan Connection, MVar ())
 getManResources manMap lid = case lookup lid manMap of
