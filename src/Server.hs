@@ -151,7 +151,7 @@ epAddProcessedTx manMap backendId proctxid =
     manMap
     backendId
     (addProcessedTx proctxid)
-    (const $ epGetProcessedTxs manMap backendId)
+    (const $ pure ["Processed."])
     "Tx has already been processed."
 
 epTransferUserBalance :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]
