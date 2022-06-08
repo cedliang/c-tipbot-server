@@ -119,6 +119,6 @@ initialiseDbs mid = do
       execute_
         conn
         " CREATE TABLE IF NOT EXISTS processed_txs ( \
-        \ txid TEXT PRIMARY KEY, \
+        \ txid TEXT PRIMARY KEY \
         \ )"
   close conn
