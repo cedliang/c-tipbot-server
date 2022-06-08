@@ -94,6 +94,9 @@ type TipbotApi =
               )
              :<|> "userrecords"
            :> Get '[JSON] [UserRecord]
+             :<|> "processedtx"
+           :> Capture "txid" Text
+           :> Post '[JSON] [Text]
        )
 
 tipbotServer :: ManagersMap -> Server TipbotApi
@@ -104,6 +107,7 @@ tipbotServer manMap = backendServer manMap
         :<|> tokenServer manMap backendId
         :<|> aliasServer manMap backendId
         :<|> epGetAllUserRecords manMap backendId
+        :<|> epAddProcessedTx manMap backendId
 
     userServer manMap backendId did =
       userBalanceServer manMap backendId did
@@ -125,6 +129,15 @@ tipbotServer manMap = backendServer manMap
 
     aliasServer manMap backendId al =
       epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
+
+epAddProcessedTx :: ManagersMap -> Int -> Text -> Handler [Text]
+epAddProcessedTx manMap backendId proctxid =
+  epAction
+    manMap
+    backendId
+    (addProcessedTx proctxid)
+    (const $ pure ["Tx processed."])
+    "Tx has already been processed."
 
 epTransferUserBalance :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]
 epTransferUserBalance manMap backendId sourceDid ldestcvalue =

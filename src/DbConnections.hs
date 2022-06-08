@@ -116,4 +116,9 @@ initialiseDbs mid = do
         \ CHECK(amount >= 0), \
         \ UNIQUE(token_id, user_did) \
         \ )"
+      execute_
+        conn
+        " CREATE TABLE IF NOT EXISTS processed_txs ( \
+        \ txid TEXT PRIMARY KEY, \
+        \ )"
   close conn

@@ -25,4 +25,5 @@ CREATE TABLE user_balance (
   CHECK(amount >= 0),
   UNIQUE(token_id, user_did)
 );
+CREATE TABLE processed_txs (txid TEXT PRIMARY KEY);
 COMMIT;

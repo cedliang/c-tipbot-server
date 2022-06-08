@@ -71,7 +71,12 @@ instance ToRow UserBalance where
 
 instance ToSchema UserBalance
 
-newtype RowText = RowText {rowtext :: Text}
+newtype ProcessedTx = ProcessedTx {txid :: Text} deriving (Show, Eq, Generic)
 
-instance FromRow RowText where
-  fromRow = RowText <$> field
+instance FromRow ProcessedTx where
+  fromRow = ProcessedTx <$> field
+
+instance ToSchema ProcessedTx
+
+instance ToRow ProcessedTx where
+  toRow (ProcessedTx txid_) = toRow $ Only txid_

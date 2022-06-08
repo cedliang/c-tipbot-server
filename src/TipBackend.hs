@@ -121,6 +121,16 @@ addNewUser did c_addr writeLock conn =
       throwError
         . SQLiteError ("Failed to add new user: " <> showt did)
 
+addProcessedTx :: Text -> MVar () -> Connection -> IO (Either OperationError ())
+addProcessedTx proctxid writeLock conn =
+  runExceptT $
+    either (throwError . SQLiteError "Could not add processed tx - tx has already been processed") pure
+      =<< writeTransact
+        writeLock
+        conn
+        ( execute conn "INSERT INTO processed_txs (txid) VALUES (?)" (Only proctxid)
+        )
+
 getUserBalance :: DiscordId -> Connection -> IO (Either OperationError CValue)
 getUserBalance did conn = runExceptT $ do
   rlovelace <-
