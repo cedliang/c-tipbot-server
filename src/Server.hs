@@ -76,27 +76,28 @@ type TipbotApi =
                          :<|> Get '[JSON] UserRecord
                      )
               )
-             :<|> "tokens"
-           :> ( Get '[JSON] [Token]
-                  :<|> "add"
-                    :> ReqBody '[JSON] Token
-                    :> Post '[JSON] [Token]
-                  :<|> "aliases"
-                    :> Capture "assetid" Text
-                    :> Get '[JSON] [TokenAlias]
-              )
-             :<|> "alias"
-           :> ( Capture "tokenalias" Text
-                  :> ( Get '[JSON] TokenAlias
-                         :<|> Capture "tokenname" Text
-                           :> Post '[JSON] [TokenAlias]
-                     )
-              )
-             :<|> "userrecords"
-           :> Get '[JSON] [UserRecord]
-             :<|> "processedtx"
-           :> Capture "txid" Text
-           :> Post '[JSON] [Text]
+           :<|> "tokens"
+             :> ( Get '[JSON] [Token]
+                    :<|> "add"
+                      :> ReqBody '[JSON] Token
+                      :> Post '[JSON] [Token]
+                    :<|> "aliases"
+                      :> Capture "assetid" Text
+                      :> Get '[JSON] [TokenAlias]
+                )
+           :<|> "alias"
+             :> ( Capture "tokenalias" Text
+                    :> ( Get '[JSON] TokenAlias
+                           :<|> Capture "tokenname" Text
+                             :> Post '[JSON] [TokenAlias]
+                       )
+                )
+           :<|> "userrecords"
+             :> Get '[JSON] [UserRecord]
+           :<|> "processedtx"
+             :> ( Get '[JSON] [Text] :<|> Capture "txid" Text
+                    :> Post '[JSON] [Text]
+                )
        )
 
 tipbotServer :: ManagersMap -> Server TipbotApi
@@ -107,7 +108,7 @@ tipbotServer manMap = backendServer manMap
         :<|> tokenServer manMap backendId
         :<|> aliasServer manMap backendId
         :<|> epGetAllUserRecords manMap backendId
-        :<|> epAddProcessedTx manMap backendId
+        :<|> processedTxsServer manMap backendId
 
     userServer manMap backendId did =
       userBalanceServer manMap backendId did
@@ -128,7 +129,21 @@ tipbotServer manMap = backendServer manMap
         :<|> epGetTokenAliases manMap backendId
 
     aliasServer manMap backendId al =
-      epGetAlias manMap backendId al :<|> epAddAlias manMap backendId al
+      epGetAlias manMap backendId al
+        :<|> epAddAlias manMap backendId al
+
+    processedTxsServer manMap backendId =
+      epGetProcessedTxs manMap backendId
+        :<|> epAddProcessedTx manMap backendId
+
+epGetProcessedTxs :: ManagersMap -> Int -> Handler [Text]
+epGetProcessedTxs manMap backendId =
+  epAction
+    manMap
+    backendId
+    (const getProcessedTxs)
+    pure
+    "Couldn't get processed txs."
 
 epAddProcessedTx :: ManagersMap -> Int -> Text -> Handler [Text]
 epAddProcessedTx manMap backendId proctxid =
@@ -136,7 +151,7 @@ epAddProcessedTx manMap backendId proctxid =
     manMap
     backendId
     (addProcessedTx proctxid)
-    (const $ pure ["Tx processed."])
+    (const $ epGetProcessedTxs manMap backendId)
     "Tx has already been processed."
 
 epTransferUserBalance :: ManagersMap -> Int -> Int -> [UserCValue] -> Handler [UserCValue]

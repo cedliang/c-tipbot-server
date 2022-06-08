@@ -131,6 +131,13 @@ addProcessedTx proctxid writeLock conn =
         ( execute conn "INSERT INTO processed_txs (txid) VALUES (?)" (Only proctxid)
         )
 
+getProcessedTxs :: Connection -> IO (Either OperationError [Text])
+getProcessedTxs conn =
+  either (pure . Left) (pure . Right . map txid)
+    =<< handle
+      (pure . Left . SQLiteError "Failed to get processed txs.")
+      (Right <$> query_ conn "SELECT * FROM processed_txs")
+
 getUserBalance :: DiscordId -> Connection -> IO (Either OperationError CValue)
 getUserBalance did conn = runExceptT $ do
   rlovelace <-
