@@ -2,12 +2,10 @@
 
 module Types.SchemaOps where
 
-import Control.Exception (bracket, handle)
 import Control.Monad.Except
 import Data.Map as Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
-import Data.Text qualified as T
 import Database.SQLite.Simple
 import Types.SchemaTypes
 

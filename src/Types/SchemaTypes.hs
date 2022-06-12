@@ -5,7 +5,6 @@ module Types.SchemaTypes where
 import Data.Aeson
 import Data.OpenApi
 import Data.Text (Text)
-import Data.Text qualified as T
 import Database.SQLite.Simple
 import GHC.Generics
 
