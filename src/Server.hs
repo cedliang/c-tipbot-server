@@ -5,7 +5,6 @@ module Server where
 
 import Control.Concurrent
 import Control.Exception (bracket)
-import Control.Monad
 import Data.Aeson.Text (encodeToLazyText)
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy (ByteString)
