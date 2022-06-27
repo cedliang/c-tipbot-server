@@ -1,10 +1,7 @@
-resolver: nightly-2022-04-28
+resolver: nightly-2022-06-26
 packages:
   - .
 
 ghc-options:
   "$everything": -j
 
-extra-deps:
-  - sqlite-simple-0.4.18.2@sha256:dda1643e723591c880dda8eeba73e93502cfa775078a79da55b5efec4c52ff66,3028
-  - direct-sqlite-2.3.27@sha256:94207d3018da3bda84bc6ce00d2c0236ced7edb37afbd726ed2a0bfa236e149b,3771
