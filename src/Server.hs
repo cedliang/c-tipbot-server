@@ -270,4 +270,4 @@ epAction manMap backendId retrieveAct successAct errStr = do
   either
     (throwError . mk404ServerError errStr)
     successAct
-    =<< bracketEndpointAction connsChan (retrieveAct writeLock)
+    =<< (bracketEndpointAction connsChan (retrieveAct writeLock))
