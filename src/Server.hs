@@ -59,21 +59,23 @@ combinedServer manMap = apiServer manMap :<|> tipbotServer manMap
     apiServer _ = pure $ toOpenApi (Proxy :: Proxy TipbotApi)
 
 type TipbotApi =
-  "backend" :> Capture "backendID" Int
-    :> ( "user" :> Capture "userdid" Int
+  "backend"
+    :> Capture "backendID" Int
+    :> ( "user"
+           :> Capture "userdid" Int
            :> ( "balance"
                   :> ( Get '[JSON] CValue
                          :<|> ReqBody '[JSON] CValue
                            :> Post '[JSON] CValue
                      )
                   :<|> "transfer"
-                  :> ReqBody '[JSON] [UserCValue]
-                  :> Post '[JSON] [UserCValue]
+                    :> ReqBody '[JSON] [UserCValue]
+                    :> Post '[JSON] [UserCValue]
                   :<|> "record"
-                  :> ( Capture "c_addr" Text
-                         :> Post '[JSON] UserRecord
-                         :<|> Get '[JSON] UserRecord
-                     )
+                    :> ( Capture "c_addr" Text
+                           :> Post '[JSON] UserRecord
+                           :<|> Get '[JSON] UserRecord
+                       )
               )
            :<|> "tokens"
              :> ( Get '[JSON] [Token]
@@ -94,8 +96,9 @@ type TipbotApi =
            :<|> "userrecords"
              :> Get '[JSON] [UserRecord]
            :<|> "processedtx"
-             :> ( Get '[JSON] [Text] :<|> Capture "txid" Text
-                    :> Post '[JSON] [Text]
+             :> ( Get '[JSON] [Text]
+                    :<|> Capture "txid" Text
+                      :> Post '[JSON] [Text]
                 )
        )
 
