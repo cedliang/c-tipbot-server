@@ -96,6 +96,25 @@ addBackendToken tok writeLock conn =
       throwError
         . SQLiteError ("Failed to add new token: " <> T.pack (show tok))
 
+editBackendToken ::
+  Token -> MVar () -> Connection -> IO (Either OperationError ())
+editBackendToken tok writeLock conn =
+  runExceptT $
+    either handleEditTokenError pure
+      =<< writeTransact
+        writeLock
+        conn
+        ( execute
+            conn
+            "UPDATE tokens SET name = (?), decimals = (?) WHERE id = (?)"
+            tok
+        )
+  where
+    handleEditTokenError :: SQLError -> ExceptT OperationError IO ()
+    handleEditTokenError =
+      throwError
+        . SQLiteError ("Failed to edit token: " <> T.pack (show tok))
+
 getUserRecord :: DiscordId -> Connection -> IO (Either OperationError UserRecord)
 getUserRecord did conn = handle
   (pure . Left . SQLiteError ("Failed to get UserRecord: " <> showt did))

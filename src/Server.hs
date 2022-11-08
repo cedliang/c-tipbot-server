@@ -82,6 +82,9 @@ type TipbotApi =
                     :<|> "add"
                       :> ReqBody '[JSON] Token
                       :> Post '[JSON] [Token]
+                    :<|> "edit"
+                      :> ReqBody '[JSON] Token
+                      :> Patch '[JSON] [Token]
                     :<|> "aliases"
                       :> Capture "assetid" Text
                       :> Get '[JSON] [TokenAlias]
@@ -128,6 +131,7 @@ tipbotServer manMap = backendServer manMap
     tokenServer manMap backendId =
       epListTokens manMap backendId
         :<|> epAddToken manMap backendId
+        :<|> epEditToken manMap backendId
         :<|> epGetTokenAliases manMap backendId
 
     aliasServer manMap backendId al =
@@ -227,6 +231,15 @@ epAddToken manMap backendId addTok =
     (addBackendToken addTok)
     (const $ epListTokens manMap backendId)
     "Could not add token to backend: "
+
+epEditToken :: ManagersMap -> Int -> Token -> Handler [Token]
+epEditToken manMap backendId editTok =
+  epAction
+    manMap
+    backendId
+    (editBackendToken editTok)
+    (const $ epListTokens manMap backendId)
+    "Could not edit token in backend: "
 
 epListTokens :: ManagersMap -> Int -> Handler [Token]
 epListTokens manMap backendId =
