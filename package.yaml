@@ -1,0 +1,44 @@
+name: tipbot-server
+version: 0.1.0.2
+license: BSD3
+author: "ced"
+maintainer: "cardano@cedric.app"
+copyright: "2022"
+
+synopsis: INSERT HERE
+category: INSERT HERE
+
+description: Please see the README on GitHub
+
+dependencies:
+  - base >= 4.7 && < 5
+  - sqlite-simple
+  - text
+  - bytestring
+  - mtl
+  - containers
+  - text-show
+  - wai-extra
+  - servant-server
+  - warp
+  - wai-cors
+  - aeson
+  - openapi3
+  - servant-openapi3
+library:
+  source-dirs: src
+  verbatim:
+    default-language: GHC2021
+
+executables:
+  tipbot-server-exe:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - tipbot-server
+    verbatim:
+      default-language: GHC2021
