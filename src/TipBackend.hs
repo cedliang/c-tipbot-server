@@ -6,7 +6,9 @@ module TipBackend where
 
 import Control.Concurrent
 import Control.Exception
+import Control.Monad
 import Control.Monad.Except
+import Control.Monad.Trans.Class
 import Data.Aeson
 import Data.Either
 import Data.Map as Map (Map)

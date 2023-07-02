@@ -3,6 +3,7 @@ module Types.DBIO where
 import Control.Concurrent
 import Control.Exception
 import Control.Monad.Except
+import Control.Monad.Trans.Class
 import Database.SQLite.Simple
 import Types.Errors
 

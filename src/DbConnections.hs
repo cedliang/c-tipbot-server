@@ -5,7 +5,7 @@ module DbConnections where
 import Control.Concurrent
 import Control.Exception (bracket)
 import Control.Monad
-import Control.Monad.Except
+import Control.Monad.IO.Class
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy (ByteString)
 import Data.Text qualified as T

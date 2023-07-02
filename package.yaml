@@ -25,6 +25,7 @@ dependencies:
   - aeson
   - openapi3
   - servant-openapi3
+  - transformers
 library:
   source-dirs: src
   verbatim:

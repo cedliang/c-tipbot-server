@@ -4,7 +4,6 @@ module Types.Errors where
 
 import Control.Exception (Exception)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Database.SQLite.Simple (SQLError)
 
 data OperationError

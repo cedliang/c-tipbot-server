@@ -2,7 +2,7 @@
 
 module Types.SchemaOps where
 
-import Control.Monad.Except
+import Control.Monad
 import Data.Map as Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)

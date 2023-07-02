@@ -4,14 +4,9 @@
 module Server where
 
 import Control.Concurrent
-import Control.Exception (bracket)
-import Data.Aeson.Text (encodeToLazyText)
-import Data.ByteString qualified as B
 import Data.ByteString.Lazy (ByteString)
 import Data.OpenApi (OpenApi)
 import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Encoding qualified as T
 import Database.SQLite.Simple
 import DbConnections
 import Network.Wai.Handler.Warp
